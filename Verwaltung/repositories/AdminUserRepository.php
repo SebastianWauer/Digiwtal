@@ -26,7 +26,7 @@ class AdminUserRepository
     public function findById(int $id): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, email, role, password_hash, totp_secret
+            'SELECT id, email, role, password_hash, totp_secret, created_at, last_login_at
              FROM admin_users
              WHERE id = ? AND is_active = 1 AND deleted_at IS NULL
              LIMIT 1'
@@ -62,5 +62,13 @@ class AdminUserRepository
             'UPDATE admin_users SET deleted_at = NOW(), is_active = 0 WHERE id = ?'
         );
         $stmt->execute([$id]);
+    }
+
+    public function updateTotpSecret(int $id, ?string $secret): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE admin_users SET totp_secret = ? WHERE id = ?'
+        );
+        $stmt->execute([$secret, $id]);
     }
 }

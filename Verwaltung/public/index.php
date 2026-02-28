@@ -206,7 +206,11 @@ $router->add('GET', '/admin/customers/{id}', [$customerDetailController, 'show']
 $router->add('GET', '/admin/audit', [$auditController, 'index']);
 $router->add('GET',  '/admin/admin-users', [$adminUserController, 'index']);
 $router->add('GET',  '/admin/admin-users/create', [$adminUserController, 'create']);
+$router->add('GET',  '/admin/admin-users/{id}', [$adminUserController, 'show']);
 $router->add('POST', '/admin/admin-users', [$adminUserController, 'store']);
+$router->add('POST', '/admin/admin-users/{id}/totp/start', [$adminUserController, 'startTotpSetup']);
+$router->add('POST', '/admin/admin-users/{id}/totp/verify', [$adminUserController, 'verifyTotpSetup']);
+$router->add('GET',  '/admin/admin-users/{id}/totp/qr', [$adminUserController, 'qr']);
 $router->add('POST', '/admin/admin-users/{id}/delete', [$adminUserController, 'delete']);
 $router->add('GET',  '/admin/customers/{id}/webhooks', [$webhookManageController, 'show']);
 $router->add('POST', '/admin/customers/{id}/webhooks', [$webhookManageController, 'store']);

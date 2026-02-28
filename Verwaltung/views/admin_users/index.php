@@ -50,6 +50,7 @@ ob_start();
                         <td><span class="status-pill status-pill--<?php echo $roleClass; ?>"><?php echo htmlspecialchars((string)($u['role'] ?? 'operator'), ENT_QUOTES); ?></span></td>
                         <td class="text-muted"><?php echo htmlspecialchars((string)($u['last_login_at'] ?? '—'), ENT_QUOTES); ?></td>
                         <td>
+                            <a class="btn btn--ghost btn--sm" href="/admin/admin-users/<?php echo (int)$u['id']; ?>">Details</a>
                             <?php if (!$isSelf): ?>
                                 <form method="POST" action="/admin/admin-users/<?php echo (int)$u['id']; ?>/delete" class="table-inline-form" onsubmit="return confirm('Admin-Benutzer wirklich löschen?')">
                                     <?php echo Csrf::field(); ?>

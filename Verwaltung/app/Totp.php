@@ -5,6 +5,34 @@ class Totp
 {
     private const PERIOD = 30;
     private const DIGITS = 6;
+    private const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+    public static function generateSecret(int $length = 32): string
+    {
+        $secret = '';
+        $bytes = random_bytes($length);
+        $alphabetLength = strlen(self::BASE32_ALPHABET);
+
+        for ($i = 0; $i < $length; $i++) {
+            $secret .= self::BASE32_ALPHABET[ord($bytes[$i]) % $alphabetLength];
+        }
+
+        return $secret;
+    }
+
+    public static function buildOtpAuthUri(string $issuer, string $accountLabel, string $secret): string
+    {
+        $label = rawurlencode($issuer . ':' . $accountLabel);
+        $query = http_build_query([
+            'secret' => $secret,
+            'issuer' => $issuer,
+            'algorithm' => 'SHA1',
+            'digits' => self::DIGITS,
+            'period' => self::PERIOD,
+        ], '', '&', PHP_QUERY_RFC3986);
+
+        return 'otpauth://totp/' . $label . '?' . $query;
+    }
 
     public static function verify(string $secret, string $code, int $window = 1): bool
     {
