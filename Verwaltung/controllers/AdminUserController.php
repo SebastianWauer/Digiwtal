@@ -100,10 +100,9 @@ class AdminUserController
         if (($_SESSION['admin_role'] ?? 'operator') !== 'superadmin') {
             http_response_code(403);
             echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>403</title></head>'
-                . '<body style="font-family:system-ui;text-align:center;padding:60px">'
-                . '<h1 style="color:#dc2626">403 - Kein Zugriff</h1>'
+                . '<body><main><h1>403 - Kein Zugriff</h1>'
                 . '<p>Nur Superadmins haben Zugriff auf diesen Bereich.</p>'
-                . '<a href="/admin/dashboard">← Dashboard</a></body></html>';
+                . '<p><a href="/admin/dashboard">Zurück zum Dashboard</a></p></main></body></html>';
             exit;
         }
     }

@@ -1,0 +1,151 @@
+.customer-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.customer-domain {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.header-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.mini-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stats-hero {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.stats-hero__signal {
+  min-width: 92px;
+  text-align: center;
+}
+
+.stats-hero__signal-dot {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+}
+
+.stats-hero__signal-dot--healthy {
+  background: #32d583;
+}
+
+.stats-hero__signal-dot--degraded {
+  background: #ffba49;
+}
+
+.stats-hero__signal-dot--down,
+.stats-hero__signal-dot--unknown {
+  background: #ff6b6b;
+}
+
+.stats-hero__signal-label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.deploy-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.deploy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--card-border);
+}
+
+.deploy-card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.deploy-card__copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.agent-status {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.agent-status--ok {
+  color: #9fe9be;
+}
+
+.agent-status--error {
+  color: #ffb3b3;
+}
+
+.list-detail {
+  display: grid;
+  gap: 6px;
+}
+
+.secret-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.secret-box__label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.secret-box__value {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pagination {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pagination__item {
+  min-width: 34px;
+}
+
+.table-log summary {
+  color: #b7d2ff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.table-log pre {
+  margin-top: 10px;
+}

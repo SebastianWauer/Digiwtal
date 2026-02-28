@@ -126,10 +126,7 @@ try {
 } catch (PDOException $e) {
     http_response_code(503);
     echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Wartung</title>'
-        . '<style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f1f5f9;}'
-        . 'div{background:white;padding:40px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;}'
-        . 'h1{color:#dc2626;margin-bottom:10px;}p{color:#64748b;}</style></head>'
-        . '<body><div><h1>Verbindungsfehler</h1><p>Datenbankverbindung fehlgeschlagen. Bitte später erneut versuchen.</p></div></body></html>';
+        . '</head><body><main><h1>Verbindungsfehler</h1><p>Datenbankverbindung fehlgeschlagen. Bitte später erneut versuchen.</p></main></body></html>';
     exit;
 }
 

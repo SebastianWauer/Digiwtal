@@ -2,140 +2,117 @@
 $title = 'Kunden';
 ob_start();
 ?>
-<div style="max-width: 1200px; margin: 40px auto; padding: 20px;">
-    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-            <h1 style="margin: 0; font-size: 28px;">Kunden</h1>
-            <div style="display: flex; gap: 10px;">
-                <a href="/admin/customers/create" style="padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 4px; font-weight: 500;">Neu</a>
-                <a href="/admin/dashboard" style="padding: 10px 20px; background: #64748b; color: white; text-decoration: none; border-radius: 4px; font-weight: 500;">Dashboard</a>
-                <a href="/admin/logout" style="color: #dc2626; text-decoration: none; padding: 10px;">Logout</a>
+<div class="view-stack">
+    <section class="surface">
+        <header class="page-header">
+            <div class="page-header__main">
+                <h1 class="page-title">Kunden</h1>
+                <p class="page-subtitle">Stammdaten, Health-Signale und Zugriffe pro Kunde verwalten.</p>
             </div>
-        </div>
-        
+            <div class="page-actions">
+                <a class="btn btn--primary btn--sm" href="/admin/customers/create">Neuer Kunde</a>
+                <a class="btn btn--secondary btn--sm" href="/admin/dashboard">Dashboard</a>
+            </div>
+        </header>
+
         <?php if (isset($success)): ?>
-            <div style="background: #d1fae5; color: #065f46; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
-                <?php echo htmlspecialchars($success, ENT_QUOTES); ?>
-            </div>
+            <div class="alert alert--success"><?php echo htmlspecialchars($success, ENT_QUOTES); ?></div>
         <?php endif; ?>
-        
+
         <?php if (isset($errors) && !empty($errors)): ?>
-            <div style="background: #fee; color: #c00; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+            <div class="alert alert--error">
                 <?php foreach ($errors as $err): ?>
                     <div><?php echo htmlspecialchars($err, ENT_QUOTES); ?></div>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        
+
         <?php if (empty($customers)): ?>
-            <p style="color: #64748b;">Keine Kunden vorhanden.</p>
+            <p class="empty-state">Keine Kunden vorhanden.</p>
         <?php else: ?>
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="border-bottom: 2px solid #e2e8f0;">
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Status</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Name</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Domain</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Aktiv</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Health CMS</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Health Frontend</th>
-                        <th style="text-align: right; padding: 12px 8px; font-weight: 600;">Aktionen</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Name</th>
+                            <th>Domain</th>
+                            <th>Aktiv</th>
+                            <th>Health CMS</th>
+                            <th>Health Frontend</th>
+                            <th class="text-right">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                     <?php foreach ($customers as $c): ?>
                         <?php
                         $ampel = (string)($c['ampel'] ?? 'red');
-                        $ampelColor = match($ampel) {
-                            'green' => '#22c55e',
-                            'yellow' => '#eab308',
-                            'red' => '#ef4444',
-                            default => '#94a3b8'
-                        };
-                        $safeColor = htmlspecialchars($ampelColor, ENT_QUOTES);
-                        $ampelText = match($ampel) {
-                            'green' => '●',
-                            'yellow' => '●',
-                            'red' => '●',
-                            default => '○'
+                        $ampelClass = match ($ampel) {
+                            'green' => 'status-dot--green',
+                            'yellow' => 'status-dot--yellow',
+                            'red' => 'status-dot--red',
+                            default => 'status-dot--muted',
                         };
                         $cmsHealth = (string)($c['health_cms_status'] ?? $c['health_status'] ?? 'unknown');
                         $frontendHealth = (string)($c['health_frontend_status'] ?? 'n/a');
-                        $cmsColor = match($cmsHealth) {
-                            'healthy' => '#22c55e',
-                            'degraded' => '#eab308',
-                            'down', 'timeout' => '#ef4444',
-                            default => '#94a3b8'
+                        $cmsClass = match ($cmsHealth) {
+                            'healthy' => 'healthy',
+                            'degraded' => 'degraded',
+                            'down' => 'down',
+                            'timeout' => 'timeout',
+                            default => 'unknown',
                         };
-                        $frontendColor = match($frontendHealth) {
-                            'healthy' => '#22c55e',
-                            'degraded' => '#eab308',
-                            'down', 'timeout' => '#ef4444',
-                            default => '#94a3b8'
+                        $frontendClass = match ($frontendHealth) {
+                            'healthy' => 'healthy',
+                            'degraded' => 'degraded',
+                            'down' => 'down',
+                            'timeout' => 'timeout',
+                            'n/a' => 'na',
+                            default => 'unknown',
                         };
                         ?>
-                        <tr style="border-bottom: 1px solid #f1f5f9;">
-                            <td style="padding: 12px 8px;">
-                                <span style="color: <?php echo $safeColor; ?>; font-size: 24px;"><?php echo $ampelText; ?></span>
-                            </td>
-                            <td style="padding: 12px 8px; font-weight: 500;">
-                                <a href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>"
-                                   style="color: #1e293b; text-decoration: none; font-weight: 600;">
+                        <tr>
+                            <td><span class="status-dot <?php echo $ampelClass; ?>"></span></td>
+                            <td>
+                                <a class="link-action" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>">
                                     <?php echo htmlspecialchars((string)($c['name'] ?? ''), ENT_QUOTES); ?>
                                 </a>
                             </td>
-                            <td style="padding: 12px 8px; color: #64748b; font-size: 14px;">
-                                <?php echo htmlspecialchars((string)($c['domain'] ?? ''), ENT_QUOTES); ?>
-                            </td>
-                            <td style="padding: 12px 8px;">
-                                <?php echo ((int)($c['is_active'] ?? 0) === 1) ? '✓' : '✗'; ?>
-                            </td>
-                            <td style="padding: 12px 8px;">
-                                <button type="button"
-                                    data-health-detail="<?php echo htmlspecialchars((string)($c['health_cms_detail'] ?? ''), ENT_QUOTES); ?>"
-                                    style="padding: 4px 8px; background: <?php echo htmlspecialchars($cmsColor, ENT_QUOTES); ?>20; color: <?php echo htmlspecialchars($cmsColor, ENT_QUOTES); ?>; border-radius: 4px; font-size: 12px; font-weight: 500; border: none; cursor: pointer;">
+                            <td class="text-muted"><?php echo htmlspecialchars((string)($c['domain'] ?? ''), ENT_QUOTES); ?></td>
+                            <td><?php echo ((int)($c['is_active'] ?? 0) === 1) ? 'Ja' : 'Nein'; ?></td>
+                            <td>
+                                <button type="button" class="badge-button badge-button--<?php echo $cmsClass; ?>" data-health-detail="<?php echo htmlspecialchars((string)($c['health_cms_detail'] ?? ''), ENT_QUOTES); ?>">
                                     <?php echo htmlspecialchars($cmsHealth, ENT_QUOTES); ?>
                                 </button>
                             </td>
-                            <td style="padding: 12px 8px;">
-                                <button type="button"
-                                    data-health-detail="<?php echo htmlspecialchars((string)($c['health_frontend_detail'] ?? ''), ENT_QUOTES); ?>"
-                                    style="padding: 4px 8px; background: <?php echo htmlspecialchars($frontendColor, ENT_QUOTES); ?>20; color: <?php echo htmlspecialchars($frontendColor, ENT_QUOTES); ?>; border-radius: 4px; font-size: 12px; font-weight: 500; border: none; cursor: pointer;">
+                            <td>
+                                <button type="button" class="badge-button badge-button--<?php echo $frontendClass; ?>" data-health-detail="<?php echo htmlspecialchars((string)($c['health_frontend_detail'] ?? ''), ENT_QUOTES); ?>">
                                     <?php echo htmlspecialchars($frontendHealth, ENT_QUOTES); ?>
                                 </button>
                             </td>
-                            <td style="padding: 12px 8px; text-align: right; font-size: 12px;">
-                                <a href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/edit" style="color: #2563eb; text-decoration: none; margin-right: 8px;">Bearbeiten</a>
-                                <a href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/modules" style="color: #7c3aed; text-decoration: none; margin-right: 8px;">Module</a>
-                                <a href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/vault" style="color: #059669; text-decoration: none; margin-right: 8px;">Tresor</a>
-                                <a href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/access" style="color: #0891b2; text-decoration: none; margin-right: 8px;">Zugang</a>
-                                <a href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/deployments" style="color: #d97706; text-decoration: none; margin-right: 8px;">Deploy</a>
-                                <form method="POST" action="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/toggle" style="display: inline;">
-                                    <?php echo Csrf::field(); ?>
-                                    <button type="submit" style="background: none; border: none; color: #dc2626; cursor: pointer; text-decoration: underline;">
-                                        <?php echo ((int)($c['is_active'] ?? 0) === 1) ? 'Deaktivieren' : 'Aktivieren'; ?>
-                                    </button>
-                                </form>
+                            <td class="text-right">
+                                <div class="table-actions">
+                                    <a class="link-action link-action--info" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/edit">Bearbeiten</a>
+                                    <a class="link-action" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/modules">Module</a>
+                                    <a class="link-action link-action--success" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/vault">Tresor</a>
+                                    <a class="link-action link-action--info" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/access">Zugang</a>
+                                    <a class="link-action link-action--warning" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/deployments">Deploy</a>
+                                    <form method="POST" action="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/toggle" class="table-inline-form">
+                                        <?php echo Csrf::field(); ?>
+                                        <button type="submit" class="btn btn--linkish link-action link-action--danger">
+                                            <?php echo ((int)($c['is_active'] ?? 0) === 1) ? 'Deaktivieren' : 'Aktivieren'; ?>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
         <?php endif; ?>
-    </div>
+    </section>
 </div>
 <?php
 $content = ob_get_clean();
-ob_start();
-?>
-<script>
-document.addEventListener('click', function (event) {
-    var button = event.target.closest('[data-health-detail]');
-    if (!button) return;
-    var detail = button.getAttribute('data-health-detail') || 'Keine Details vorhanden.';
-    window.alert(detail);
-});
-</script>
-<?php
-$extraScripts = ob_get_clean();
 require __DIR__ . '/../layout.php';

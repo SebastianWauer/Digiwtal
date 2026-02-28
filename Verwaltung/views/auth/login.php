@@ -1,27 +1,27 @@
 <?php
 $title = 'Login';
+$layoutMode = 'auth';
 ob_start();
 ?>
-<div class="container">
-    <div class="card">
-        <h1>Admin Login</h1>
-        <?php if (isset($error)): ?>
-            <div class="error"><?php echo htmlspecialchars($error, ENT_QUOTES); ?></div>
-        <?php endif; ?>
-        <form method="POST" action="/admin/login">
-            <?php echo Csrf::field(); ?>
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" required autofocus>
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit">Login</button>
-        </form>
+<h1 class="auth-title">Admin Login</h1>
+<p class="auth-copy">Melde dich mit deinem Verwaltungskonto an.</p>
+
+<?php if (isset($error)): ?>
+    <div class="alert alert--error"><?php echo htmlspecialchars($error, ENT_QUOTES); ?></div>
+<?php endif; ?>
+
+<form method="POST" action="/admin/login" class="form-stack">
+    <?php echo Csrf::field(); ?>
+    <div class="field">
+        <label for="email">E-Mail</label>
+        <input class="input" type="email" id="email" name="email" required autofocus>
     </div>
-</div>
+    <div class="field">
+        <label for="password">Passwort</label>
+        <input class="input" type="password" id="password" name="password" required>
+    </div>
+    <button class="btn btn--primary btn--block" type="submit">Login</button>
+</form>
 <?php
 $content = ob_get_clean();
 require __DIR__ . '/../layout.php';

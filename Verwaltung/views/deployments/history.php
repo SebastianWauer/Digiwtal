@@ -13,208 +13,176 @@ if ($baseTarget === '') {
 }
 ob_start();
 ?>
-<div style="max-width: 1000px; margin: 40px auto; padding: 20px;">
-    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <div style="margin-bottom: 20px;">
-            <h1 style="margin: 0 0 10px 0; font-size: 28px;">Deployments</h1>
-            <p style="margin: 0; color: #64748b; font-size: 14px;">
-                Kunde: <strong><?php echo htmlspecialchars((string)($customer['name'] ?? ''), ENT_QUOTES); ?></strong>
-            </p>
-            <a href="/admin/customers" style="color: #64748b; text-decoration: none; font-size: 14px;">← Zurück zu Kunden</a>
-        </div>
-        
-        <?php if (isset($success)): ?>
-            <div style="background: #d1fae5; color: #065f46; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
-                <?php echo htmlspecialchars($success, ENT_QUOTES); ?>
+<div class="view-stack">
+    <section class="surface">
+        <header class="page-header">
+            <div class="page-header__main">
+                <h1 class="page-title">Deployments</h1>
+                <p class="page-subtitle">Kunde: <strong><?php echo htmlspecialchars((string)($customer['name'] ?? ''), ENT_QUOTES); ?></strong></p>
             </div>
+            <div class="page-actions">
+                <a class="btn btn--secondary btn--sm" href="/admin/customers">Kunden</a>
+            </div>
+        </header>
+
+        <?php if (isset($success)): ?>
+            <div class="alert alert--success"><?php echo htmlspecialchars($success, ENT_QUOTES); ?></div>
         <?php endif; ?>
-        
         <?php if (isset($errors) && !empty($errors)): ?>
-            <div style="background: #fee; color: #c00; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+            <div class="alert alert--error">
                 <?php foreach ($errors as $err): ?>
                     <div><?php echo htmlspecialchars($err, ENT_QUOTES); ?></div>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
 
-        <div style="background: #f8fafc; color: #334155; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 20px; font-size: 13px; line-height: 1.5;">
-            <div style="font-weight: 600; margin-bottom: 6px;">Deploy-Zielstruktur</div>
+        <div class="hint-card hint-card--info">
             <div><strong>Basis-Pfad:</strong> <code><?php echo htmlspecialchars($baseTarget, ENT_QUOTES); ?></code></div>
             <div><strong>Transfer-Protokoll:</strong> <code><?php echo htmlspecialchars((string)($access['protocol'] ?? 'ftp'), ENT_QUOTES); ?></code></div>
             <div><strong>CMS:</strong> lokaler Projektordner <code>/CMS</code> → <code><?php echo htmlspecialchars($cmsTarget, ENT_QUOTES); ?></code></div>
             <div><strong>Frontend:</strong> lokaler Ordnerpicker → <code><?php echo htmlspecialchars($frontendTarget, ENT_QUOTES); ?></code></div>
-            <div style="margin-top: 6px;">
-                <strong>Deploy-Ziel:</strong> `CMS` geht in den konfigurierten CMS-Zielpfad (`server_path`), `Frontend` in den konfigurierten Frontend-Zielpfad (`html_path`), `CMS + Frontend` deployt beides getrennt.
-            </div>
         </div>
 
-        <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/test-connections"
-              style="margin-bottom: 20px;">
+        <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/test-connections" class="form-stack">
             <?php echo Csrf::field(); ?>
-            <button type="submit" style="padding: 10px 20px; background: #475569; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-                Server- und DB-Verbindung testen
-            </button>
-            <p style="margin: 6px 0 0 0; color: #64748b; font-size: 12px;">
-                Prüft getrennt den konfigurierten Serverzugang und die Kundendatenbank, ohne Dateien zu deployen.
-            </p>
-        </form>
-
-        <div style="background: #ecfeff; color: #155e75; padding: 16px; border: 1px solid #a5f3fc; border-radius: 6px; margin-bottom: 20px; font-size: 13px; line-height: 1.6;">
-            <div style="font-weight: 600; margin-bottom: 6px;">Lokaler SFTP-Agent</div>
-            <div>Für echtes One-Click-SFTP startet auf deinem Rechner ein lokaler HTTPS-Agent auf <code>https://127.0.0.1:8765</code>. Die Verwaltung liefert nur das Deploy-Payload.</div>
-            <div style="margin-top: 6px;">Start lokal im Projektverzeichnis:</div>
-            <code style="display: block; margin-top: 6px; padding: 10px; background: #082f49; color: #e0f2fe; border-radius: 4px;">php Verwaltung/agent/generate_cert.php
-php Verwaltung/agent/server.php</code>
-            <div style="margin-top: 8px; color: #0f766e;">
-                Danach dieselbe Browser-Instanz einmal auf <a href="https://127.0.0.1:8765/health" target="_blank" rel="noreferrer" style="color: #0f766e; font-weight: 600;">https://127.0.0.1:8765/health</a> öffnen und dem lokalen Zertifikat vertrauen.
+            <div class="submit-row">
+                <button class="btn btn--secondary" type="submit">Server- und DB-Verbindung testen</button>
             </div>
-            <div id="localAgentStatus" style="margin-top: 8px; color: #0f172a;">Status: nicht geprüft</div>
-        </div>
+            <div class="field__hint">Prüft getrennt den konfigurierten Serverzugang und die Kundendatenbank, ohne Dateien zu deployen.</div>
+        </form>
+    </section>
 
-        <div style="display: grid; gap: 16px; margin-bottom: 20px;">
-            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload"
-                  style="background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 16px;">
+    <section class="surface">
+        <h2 class="section-title">Lokaler SFTP-Agent</h2>
+        <div class="hint-card hint-card--success">
+            <div>Für echtes One-Click-SFTP startet auf deinem Rechner ein lokaler HTTPS-Agent auf <code>https://127.0.0.1:8765</code>. Die Verwaltung liefert nur das Deploy-Payload.</div>
+            <code class="code-block">php Verwaltung/agent/generate_cert.php
+php Verwaltung/agent/server.php</code>
+            <div>Danach dieselbe Browser-Instanz einmal auf <a class="link-action link-action--success" href="https://127.0.0.1:8765/health" target="_blank" rel="noreferrer">https://127.0.0.1:8765/health</a> öffnen und dem lokalen Zertifikat vertrauen.</div>
+            <div class="agent-status" id="localAgentStatus">Status: nicht geprüft</div>
+        </div>
+    </section>
+
+    <section class="surface">
+        <div class="deploy-grid">
+            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="cms">
-                <div style="font-weight: 600; margin-bottom: 6px;">CMS deployen</div>
-                <p style="margin: 0 0 12px 0; color: #64748b; font-size: 12px;">Nutzt den lokalen Projektordner <code>/CMS</code> auf deinem Rechner und lädt per SFTP hoch.</p>
-                <button type="submit" style="padding: 10px 20px; background: #0f766e; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-                    CMS deployen
-                </button>
+                <h2 class="deploy-card__title">CMS deployen</h2>
+                <p class="deploy-card__copy">Nutzt den lokalen Projektordner <code>/CMS</code> auf deinem Rechner und lädt per SFTP hoch.</p>
+                <div class="submit-row">
+                    <button class="btn btn--success" type="submit">CMS deployen</button>
+                </div>
             </form>
 
-            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload"
-                  style="background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 16px;">
+            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="frontend">
-                <div style="font-weight: 600; margin-bottom: 6px;">Frontend deployen</div>
-                <p style="margin: 0 0 12px 0; color: #64748b; font-size: 12px;">Wähle den lokalen Frontend-Ordner. Er wird im Browser komprimiert und vom lokalen Agenten per SFTP übertragen.</p>
-                <input type="file" name="frontend_files[]" data-frontend-picker="1" webkitdirectory directory multiple required style="margin-bottom: 12px;">
-                <button type="submit" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-                    Frontend deployen
-                </button>
+                <h2 class="deploy-card__title">Frontend deployen</h2>
+                <p class="deploy-card__copy">Wähle den lokalen Frontend-Ordner. Er wird im Browser komprimiert und vom lokalen Agenten per SFTP übertragen.</p>
+                <input class="file-input" type="file" name="frontend_files[]" data-frontend-picker="1" webkitdirectory directory multiple required>
+                <div class="submit-row">
+                    <button class="btn btn--info" type="submit">Frontend deployen</button>
+                </div>
             </form>
 
-            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload"
-                  style="background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 16px;">
+            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="combined">
-                <div style="font-weight: 600; margin-bottom: 6px;">CMS + Frontend deployen</div>
-                <p style="margin: 0 0 12px 0; color: #64748b; font-size: 12px;">CMS kommt aus deinem lokalen Projektordner <code>/CMS</code>, Frontend aus dem gewählten Ordner.</p>
-                <input type="file" name="frontend_files[]" data-frontend-picker="1" webkitdirectory directory multiple required style="margin-bottom: 12px;">
-                <button type="submit" style="padding: 10px 20px; background: #7c3aed; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-                    CMS + Frontend deployen
-                </button>
+                <h2 class="deploy-card__title">CMS + Frontend deployen</h2>
+                <p class="deploy-card__copy">CMS kommt aus deinem lokalen Projektordner <code>/CMS</code>, Frontend aus dem gewählten Ordner.</p>
+                <input class="file-input" type="file" name="frontend_files[]" data-frontend-picker="1" webkitdirectory directory multiple required>
+                <div class="submit-row">
+                    <button class="btn btn--warning" type="submit">Kombiniert deployen</button>
+                </div>
             </form>
         </div>
-        
-        <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/rollback"
-              onsubmit="return confirm('Wirklich auf den letzten Stand zurückrollen?');">
-            <?php echo Csrf::field(); ?>
-            <button type="submit" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-                Rollback
-            </button>
-        </form>
-        <p style="margin: 6px 0 0 0; color: #64748b; font-size: 12px;">Stellt letzten bekannten Stand wieder her</p>
-        
+    </section>
+
+    <section class="surface">
+        <div class="submit-row">
+            <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/rollback" class="table-inline-form" onsubmit="return confirm('Wirklich auf den letzten Stand zurückrollen?');">
+                <?php echo Csrf::field(); ?>
+                <button class="btn btn--secondary" type="submit">Rollback</button>
+            </form>
+            <span class="field__hint">Stellt den letzten bekannten Stand wieder her.</span>
+        </div>
+    </section>
+
+    <section class="surface">
+        <h2 class="section-title">Deployment-Historie</h2>
         <?php if (empty($deployments)): ?>
-            <p style="color: #64748b;">Noch keine Deployments vorhanden.</p>
+            <p class="empty-state">Noch keine Deployments vorhanden.</p>
         <?php else: ?>
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="border-bottom: 2px solid #e2e8f0;">
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">ID</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Typ</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Status</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Version</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Dauer</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Gestartet</th>
-                        <th style="text-align: left; padding: 12px 8px; font-weight: 600;">Ausgelöst durch</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Typ</th>
+                            <th>Status</th>
+                            <th>Version</th>
+                            <th>Dauer</th>
+                            <th>Gestartet</th>
+                            <th>Ausgelöst durch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                     <?php foreach ($deployments as $d): ?>
                         <?php
                         $status = (string)($d['status'] ?? 'pending');
-                        $statusColor = match($status) {
-                            'pending' => '#94a3b8',
-                            'running' => '#3b82f6',
-                            'success' => '#22c55e',
-                            'failed' => '#ef4444',
-                            'rolled_back' => '#f97316',
-                            default => '#94a3b8'
+                        $statusClass = match ($status) {
+                            'success' => 'healthy',
+                            'running' => 'degraded',
+                            'failed' => 'down',
+                            'rolled_back' => 'timeout',
+                            default => 'unknown',
                         };
-                        
                         $duration = '—';
-                        $startedAt = $d['started_at'] ?? null;
-                        $finishedAt = $d['finished_at'] ?? null;
-                        if ($startedAt !== null && $finishedAt !== null) {
-                            $start = strtotime($startedAt);
-                            $finish = strtotime($finishedAt);
+                        if (($d['started_at'] ?? null) !== null && ($d['finished_at'] ?? null) !== null) {
+                            $start = strtotime((string)$d['started_at']);
+                            $finish = strtotime((string)$d['finished_at']);
                             if ($start !== false && $finish !== false) {
-                                $secs = $finish - $start;
-                                $duration = $secs . 's';
+                                $duration = ($finish - $start) . 's';
                             }
                         }
-                        
                         $version = '—';
-                        $versionFrom = (string)($d['version_from'] ?? '');
-                        $versionTo = (string)($d['version_to'] ?? '');
-                        if ($versionFrom !== '' && $versionTo !== '') {
-                            $version = htmlspecialchars($versionFrom, ENT_QUOTES) . ' → ' . htmlspecialchars($versionTo, ENT_QUOTES);
+                        if ((string)($d['version_from'] ?? '') !== '' && (string)($d['version_to'] ?? '') !== '') {
+                            $version = htmlspecialchars((string)$d['version_from'], ENT_QUOTES) . ' → ' . htmlspecialchars((string)$d['version_to'], ENT_QUOTES);
                         }
-                        
-                        $createdAt = $d['created_at'] ?? null;
                         $createdStr = '—';
-                        if ($createdAt !== null) {
-                            $createdTime = strtotime($createdAt);
+                        if (($d['created_at'] ?? null) !== null) {
+                            $createdTime = strtotime((string)$d['created_at']);
                             if ($createdTime !== false) {
                                 $diff = time() - $createdTime;
-                                if ($diff < 3600) {
-                                    $createdStr = 'vor ' . ceil($diff / 60) . ' Min';
-                                } else {
-                                    $createdStr = date('d.m.Y H:i', $createdTime);
-                                }
+                                $createdStr = $diff < 3600 ? ('vor ' . ceil($diff / 60) . ' Min') : date('d.m.Y H:i', $createdTime);
                             }
                         }
                         ?>
-                        <tr style="border-bottom: 1px solid #f1f5f9;">
-                            <td style="padding: 12px 8px; font-weight: 500;">
+                        <tr>
+                            <td>
                                 <?php if (!empty($d['log'])): ?>
-                                    <details>
-                                        <summary style="cursor: pointer; color: #2563eb;">#<?php echo (int)($d['id'] ?? 0); ?></summary>
-                                        <pre style="background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 4px; font-size: 11px; white-space: pre-wrap; margin-top: 8px; max-height: 300px; overflow-y: auto;"><?php echo htmlspecialchars((string)($d['log'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></pre>
+                                    <details class="table-log">
+                                        <summary>#<?php echo (int)($d['id'] ?? 0); ?></summary>
+                                        <pre class="code-block"><?php echo htmlspecialchars((string)($d['log'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></pre>
                                     </details>
                                 <?php else: ?>
                                     #<?php echo (int)($d['id'] ?? 0); ?>
                                 <?php endif; ?>
                             </td>
-                            <td style="padding: 12px 8px; font-size: 12px;">
-                                <?php echo htmlspecialchars((string)($d['type'] ?? 'cms'), ENT_QUOTES); ?>
-                            </td>
-                            <td style="padding: 12px 8px;">
-                                <span style="padding: 4px 8px; background: <?php echo $statusColor; ?>20; color: <?php echo $statusColor; ?>; border-radius: 4px; font-size: 12px; font-weight: 500;">
-                                    <?php echo htmlspecialchars($status, ENT_QUOTES); ?>
-                                </span>
-                            </td>
-                            <td style="padding: 12px 8px; font-size: 12px;">
-                                <?php echo $version; ?>
-                            </td>
-                            <td style="padding: 12px 8px; font-size: 12px;">
-                                <?php echo $duration; ?>
-                            </td>
-                            <td style="padding: 12px 8px; color: #64748b; font-size: 12px;">
-                                <?php echo $createdStr; ?>
-                            </td>
-                            <td style="padding: 12px 8px; font-size: 12px;">
-                                <?php echo htmlspecialchars((string)($d['triggered_by'] ?? 'manual'), ENT_QUOTES); ?>
-                            </td>
+                            <td class="mono"><?php echo htmlspecialchars((string)($d['type'] ?? 'cms'), ENT_QUOTES); ?></td>
+                            <td><span class="status-pill status-pill--<?php echo $statusClass; ?>"><?php echo htmlspecialchars($status, ENT_QUOTES); ?></span></td>
+                            <td class="mono"><?php echo $version; ?></td>
+                            <td class="mono"><?php echo $duration; ?></td>
+                            <td class="text-muted"><?php echo $createdStr; ?></td>
+                            <td><?php echo htmlspecialchars((string)($d['triggered_by'] ?? 'manual'), ENT_QUOTES); ?></td>
                         </tr>
                     <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
         <?php endif; ?>
-    </div>
+    </section>
 </div>
 <?php
 $content = ob_get_clean();

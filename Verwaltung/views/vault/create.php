@@ -2,51 +2,47 @@
 $title = 'Geheimnis erstellen';
 ob_start();
 ?>
-<div style="max-width: 800px; margin: 40px auto; padding: 20px;">
-    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h1>Neue Zugangsdaten</h1>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">
-            Kunde: <strong><?php echo htmlspecialchars((string)($customer['name'] ?? ''), ENT_QUOTES); ?></strong>
-        </p>
-        
+<div class="view-stack view-stack--narrow">
+    <section class="surface">
+        <header class="page-header">
+            <div class="page-header__main">
+                <h1 class="page-title">Neue Zugangsdaten</h1>
+                <p class="page-subtitle">Kunde: <strong><?php echo htmlspecialchars((string)($customer['name'] ?? ''), ENT_QUOTES); ?></strong></p>
+            </div>
+        </header>
+
         <?php if (!empty($errors)): ?>
-            <div class="error">
+            <div class="alert alert--error">
                 <?php foreach ($errors as $err): ?>
                     <div><?php echo htmlspecialchars($err, ENT_QUOTES); ?></div>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        
-        <form method="POST" action="/admin/customers/<?php echo (int)($customerId ?? 0); ?>/vault">
+
+        <form method="POST" action="/admin/customers/<?php echo (int)($customerId ?? 0); ?>/vault" class="form-stack">
             <?php echo Csrf::field(); ?>
-            
-            <div class="form-group">
-                <label for="label">Label (z.B. "IONOS Webspace")</label>
-                <input type="text" id="label" name="label" maxlength="100" value="<?php echo htmlspecialchars((string)($old['label'] ?? ''), ENT_QUOTES); ?>">
+            <div class="field">
+                <label for="label">Label</label>
+                <input class="input" type="text" id="label" name="label" maxlength="100" value="<?php echo htmlspecialchars((string)($old['label'] ?? ''), ENT_QUOTES); ?>" placeholder='z.B. "IONOS Webspace"'>
             </div>
-            
-            <div class="form-group">
+            <div class="field">
                 <label for="host">Host</label>
-                <input type="text" id="host" name="host" maxlength="255" value="<?php echo htmlspecialchars((string)($old['host'] ?? ''), ENT_QUOTES); ?>" placeholder="z.B. ftp.example.com">
+                <input class="input" type="text" id="host" name="host" maxlength="255" value="<?php echo htmlspecialchars((string)($old['host'] ?? ''), ENT_QUOTES); ?>" placeholder="z.B. ftp.example.com">
             </div>
-            
-            <div class="form-group">
+            <div class="field">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" maxlength="255" value="<?php echo htmlspecialchars((string)($old['username'] ?? ''), ENT_QUOTES); ?>">
+                <input class="input" type="text" id="username" name="username" maxlength="255" value="<?php echo htmlspecialchars((string)($old['username'] ?? ''), ENT_QUOTES); ?>">
             </div>
-            
-            <div class="form-group">
+            <div class="field">
                 <label for="secret">Secret / Passwort *</label>
-                <input type="password" id="secret" name="secret" required autofocus>
+                <input class="input" type="password" id="secret" name="secret" required autofocus>
             </div>
-            
-            <button type="submit">Speichern</button>
+            <div class="submit-row">
+                <button class="btn btn--primary" type="submit">Speichern</button>
+                <a class="btn btn--secondary" href="/admin/customers/<?php echo (int)($customerId ?? 0); ?>/vault">Zurück</a>
+            </div>
         </form>
-        
-        <div style="margin-top: 15px;">
-            <a href="/admin/customers/<?php echo (int)($customerId ?? 0); ?>/vault" style="color: #64748b; text-decoration: none;">← Zurück</a>
-        </div>
-    </div>
+    </section>
 </div>
 <?php
 $content = ob_get_clean();
