@@ -12,10 +12,13 @@ if ($baseTarget === '') {
     $baseTarget = '/';
 }
 $hasRunningDeployment = false;
+$hasSuccessfulDeployment = false;
 foreach ($deployments as $deployment) {
     if ((string)($deployment['status'] ?? '') === 'running') {
         $hasRunningDeployment = true;
-        break;
+    }
+    if ((string)($deployment['status'] ?? '') === 'success') {
+        $hasSuccessfulDeployment = true;
     }
 }
 ob_start();
@@ -76,7 +79,29 @@ php Verwaltung/agent/server.php</code>
         </div>
     </section>
 
+    <?php if (!$hasSuccessfulDeployment): ?>
+        <section class="surface">
+            <div class="hint-card hint-card--warning">
+                <div><strong>Erstinstallation</strong></div>
+                <div>Dieser Kunde hat noch keinen erfolgreichen Deploy. Die Erstinstallation deployed das CMS und führt danach die Provisionierung direkt aus.</div>
+                <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/install" class="form-stack">
+                    <?php echo Csrf::field(); ?>
+                    <div class="submit-row">
+                        <button class="btn btn--warning" type="submit" onclick="return confirm('Erstinstallation jetzt starten? Das deployed das CMS und führt die Provisionierung aus.');">Erstinstallation starten</button>
+                    </div>
+                    <div class="field__hint">Verwendet den lokalen Projektordner <code>/CMS</code> und startet anschließend automatisch die CMS-Provisionierung.</div>
+                </form>
+            </div>
+        </section>
+    <?php endif; ?>
+
     <section class="surface">
+        <header class="page-header page-header--section">
+            <div class="page-header__main">
+                <h2 class="section-title">Update-Deploys</h2>
+                <p class="page-subtitle">Für bestehende Installationen. Es werden nur Dateien deployed, keine CMS-Provisionierung.</p>
+            </div>
+        </header>
         <div class="deploy-grid">
             <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>

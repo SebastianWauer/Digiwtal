@@ -51,6 +51,45 @@ class DeployController
         require __DIR__ . '/../views/deployments/history.php';
     }
 
+    public function install(int $customerId): void
+    {
+        AdminAuth::requireAuth();
+
+        if (!Csrf::verify($_POST['csrf_token'] ?? '')) {
+            $_SESSION['flash_errors'] = ['CSRF token invalid'];
+            header('Location: /admin/customers/' . $customerId . '/deployments');
+            exit;
+        }
+
+        $customer = $this->customerRepo->findById($customerId);
+        if ($customer === null) {
+            http_response_code(404);
+            echo '<!DOCTYPE html><html><head><title>404</title></head><body><h1>404 Not Found</h1></body></html>';
+            exit;
+        }
+
+        $this->ensureNoRunningDeployment($customerId);
+
+        $deploymentId = $this->deploymentRepo->create($customerId, 'cms', 'first_install');
+        $success = $this->deployService->provisionAndRun($deploymentId, $customer, $customerId, 'cms');
+
+        $this->audit->log(
+            'deploy.first_install',
+            'deployment',
+            $deploymentId,
+            'customer: ' . $customerId
+        );
+
+        if ($success) {
+            $_SESSION['flash_success'] = 'Erstinstallation #' . $deploymentId . ' erfolgreich abgeschlossen.';
+        } else {
+            $_SESSION['flash_errors'] = ['Erstinstallation #' . $deploymentId . ' fehlgeschlagen. Details stehen im Deployment-Log.'];
+        }
+
+        header('Location: /admin/customers/' . $customerId . '/deployments');
+        exit;
+    }
+
     public function rollback(int $customerId): void
     {
         AdminAuth::requireAuth();

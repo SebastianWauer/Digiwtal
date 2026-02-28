@@ -195,6 +195,7 @@ $router->add('POST', '/admin/customers/{id}/modules/{moduleId}', [$moduleControl
 $router->add('GET',  '/admin/customers/{id}/access', [$serverAccessController, 'show']);
 $router->add('POST', '/admin/customers/{id}/access', [$serverAccessController, 'save']);
 $router->add('GET',  '/admin/customers/{id}/deployments', [$deployController, 'history']);
+$router->add('POST', '/admin/customers/{id}/deployments/install', [$deployController, 'install']);
 $router->add('POST', '/admin/customers/{id}/deployments/test-connections', [$deployController, 'testConnections']);
 $router->add('POST', '/admin/customers/{id}/deployments/agent-payload', [$deployController, 'agentPayload']);
 $router->add('POST', '/admin/customers/{id}/deployments/rollback', [$deployController, 'rollback']);
