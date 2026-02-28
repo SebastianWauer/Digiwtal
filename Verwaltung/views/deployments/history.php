@@ -11,6 +11,13 @@ if (str_ends_with($cmsTarget, '/CMS')) {
 if ($baseTarget === '') {
     $baseTarget = '/';
 }
+$hasRunningDeployment = false;
+foreach ($deployments as $deployment) {
+    if ((string)($deployment['status'] ?? '') === 'running') {
+        $hasRunningDeployment = true;
+        break;
+    }
+}
 ob_start();
 ?>
 <div class="view-stack">
@@ -117,6 +124,11 @@ php Verwaltung/agent/server.php</code>
 
     <section class="surface">
         <h2 class="section-title">Deployment-Historie</h2>
+        <?php if ($hasRunningDeployment): ?>
+            <div class="hint-card hint-card--info">
+                Ein Deployment läuft gerade. Diese Seite aktualisiert sich automatisch jede Sekunde, bis der Status auf <code>success</code> oder <code>failed</code> kippt.
+            </div>
+        <?php endif; ?>
         <?php if (empty($deployments)): ?>
             <p class="empty-state">Noch keine Deployments vorhanden.</p>
         <?php else: ?>
@@ -193,4 +205,15 @@ php Verwaltung/agent/server.php</code>
 <?php
 $content = ob_get_clean();
 $extraScripts = '<script src="/assets/deploy-frontend-upload.js"></script>';
+if ($hasRunningDeployment) {
+    $extraScripts .= <<<HTML
+<script>
+(function () {
+    window.setTimeout(function () {
+        window.location.reload();
+    }, 1000);
+})();
+</script>
+HTML;
+}
 require __DIR__ . '/../layout.php';
