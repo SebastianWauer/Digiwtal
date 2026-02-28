@@ -11,6 +11,56 @@ if (str_ends_with($cmsTarget, '/CMS')) {
 if ($baseTarget === '') {
     $baseTarget = '/';
 }
+$hasHost = trim((string)($access['host'] ?? '')) !== '';
+$hasUsername = trim((string)($access['username'] ?? '')) !== '';
+$hasServerPath = trim((string)($access['server_path'] ?? '')) !== '';
+$hasHtmlPath = trim((string)($access['html_path'] ?? '')) !== '';
+$hasHealthCmsUrl = trim((string)($access['health_cms_url'] ?? '')) !== '';
+$hasCanonicalBase = trim((string)($access['canonical_base'] ?? '')) !== '';
+$hasFrontendApiBase = $hasHealthCmsUrl || $hasCanonicalBase;
+
+$cmsDeployRequirements = [];
+if (!$hasHost) {
+    $cmsDeployRequirements[] = 'SFTP-Host fehlt';
+}
+if (!$hasUsername) {
+    $cmsDeployRequirements[] = 'Username fehlt';
+}
+if (!$hasServerPath) {
+    $cmsDeployRequirements[] = 'CMS-Zielpfad fehlt';
+}
+
+$frontendDeployRequirements = [];
+if (!$hasHost) {
+    $frontendDeployRequirements[] = 'SFTP-Host fehlt';
+}
+if (!$hasUsername) {
+    $frontendDeployRequirements[] = 'Username fehlt';
+}
+if (!$hasHtmlPath) {
+    $frontendDeployRequirements[] = 'Frontend-Zielpfad fehlt';
+}
+if (!$hasFrontendApiBase) {
+    $frontendDeployRequirements[] = 'Health CMS URL oder canonical_base fehlt';
+}
+
+$combinedDeployRequirements = [];
+if (!$hasHost) {
+    $combinedDeployRequirements[] = 'SFTP-Host fehlt';
+}
+if (!$hasUsername) {
+    $combinedDeployRequirements[] = 'Username fehlt';
+}
+if (!$hasServerPath) {
+    $combinedDeployRequirements[] = 'CMS-Zielpfad fehlt';
+}
+if (!$hasHtmlPath) {
+    $combinedDeployRequirements[] = 'Frontend-Zielpfad fehlt';
+}
+if (!$hasFrontendApiBase) {
+    $combinedDeployRequirements[] = 'Health CMS URL oder canonical_base fehlt';
+}
+
 $hasRunningDeployment = false;
 $hasSuccessfulDeployment = false;
 foreach ($deployments as $deployment) {
@@ -102,36 +152,60 @@ php Verwaltung/agent/server.php</code>
                 <p class="page-subtitle">Für bestehende Installationen. Es werden nur Dateien deployed, keine CMS-Provisionierung.</p>
             </div>
         </header>
+        <?php if (!empty($cmsDeployRequirements) || !empty($frontendDeployRequirements) || !empty($combinedDeployRequirements)): ?>
+            <div class="hint-card hint-card--warning">
+                <strong>Vor dem Deploy fehlen noch Pflichtfelder im Serverzugang.</strong>
+                <?php if (!empty($cmsDeployRequirements)): ?>
+                    <div>CMS: <?php echo htmlspecialchars(implode(', ', $cmsDeployRequirements), ENT_QUOTES); ?></div>
+                <?php endif; ?>
+                <?php if (!empty($frontendDeployRequirements)): ?>
+                    <div>Frontend: <?php echo htmlspecialchars(implode(', ', $frontendDeployRequirements), ENT_QUOTES); ?></div>
+                <?php endif; ?>
+                <?php if (!empty($combinedDeployRequirements)): ?>
+                    <div>CMS + Frontend: <?php echo htmlspecialchars(implode(', ', $combinedDeployRequirements), ENT_QUOTES); ?></div>
+                <?php endif; ?>
+                <div class="field__hint">Bitte zuerst den Serverzugang vervollständigen, bevor der lokale Agent angefragt wird.</div>
+            </div>
+        <?php endif; ?>
         <div class="deploy-grid">
-            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
+            <form method="POST" data-local-agent-form="1" data-validation-errors="<?php echo htmlspecialchars(json_encode($cmsDeployRequirements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]', ENT_QUOTES); ?>" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="cms">
                 <h2 class="deploy-card__title">CMS deployen</h2>
                 <p class="deploy-card__copy">Nutzt den lokalen Projektordner <code>/CMS</code> auf deinem Rechner und lädt per SFTP hoch.</p>
+                <?php if (!empty($cmsDeployRequirements)): ?>
+                    <div class="field__hint">Blockiert bis konfiguriert: <?php echo htmlspecialchars(implode(', ', $cmsDeployRequirements), ENT_QUOTES); ?></div>
+                <?php endif; ?>
                 <div class="submit-row">
-                    <button class="btn btn--success" type="submit">CMS deployen</button>
+                    <button class="btn btn--success" type="submit" <?php echo !empty($cmsDeployRequirements) ? 'disabled' : ''; ?>>CMS deployen</button>
                 </div>
             </form>
 
-            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
+            <form method="POST" data-local-agent-form="1" data-validation-errors="<?php echo htmlspecialchars(json_encode($frontendDeployRequirements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]', ENT_QUOTES); ?>" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="frontend">
                 <h2 class="deploy-card__title">Frontend deployen</h2>
                 <p class="deploy-card__copy">Wähle den lokalen Frontend-Ordner. Er wird im Browser komprimiert und vom lokalen Agenten per SFTP übertragen.</p>
+                <?php if (!empty($frontendDeployRequirements)): ?>
+                    <div class="field__hint">Blockiert bis konfiguriert: <?php echo htmlspecialchars(implode(', ', $frontendDeployRequirements), ENT_QUOTES); ?></div>
+                <?php endif; ?>
                 <input class="file-input" type="file" name="frontend_files[]" data-frontend-picker="1" webkitdirectory directory multiple required>
                 <div class="submit-row">
-                    <button class="btn btn--info" type="submit">Frontend deployen</button>
+                    <button class="btn btn--info" type="submit" <?php echo !empty($frontendDeployRequirements) ? 'disabled' : ''; ?>>Frontend deployen</button>
                 </div>
             </form>
 
-            <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
+            <form method="POST" data-local-agent-form="1" data-validation-errors="<?php echo htmlspecialchars(json_encode($combinedDeployRequirements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]', ENT_QUOTES); ?>" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="combined">
                 <h2 class="deploy-card__title">CMS + Frontend deployen</h2>
                 <p class="deploy-card__copy">CMS kommt aus deinem lokalen Projektordner <code>/CMS</code>, Frontend aus dem gewählten Ordner.</p>
+                <?php if (!empty($combinedDeployRequirements)): ?>
+                    <div class="field__hint">Blockiert bis konfiguriert: <?php echo htmlspecialchars(implode(', ', $combinedDeployRequirements), ENT_QUOTES); ?></div>
+                <?php endif; ?>
                 <input class="file-input" type="file" name="frontend_files[]" data-frontend-picker="1" webkitdirectory directory multiple required>
                 <div class="submit-row">
-                    <button class="btn btn--warning" type="submit">Kombiniert deployen</button>
+                    <button class="btn btn--warning" type="submit" <?php echo !empty($combinedDeployRequirements) ? 'disabled' : ''; ?>>Kombiniert deployen</button>
                 </div>
             </form>
         </div>

@@ -130,6 +130,17 @@
         el.style.color = isError ? '#b91c1c' : '#0f172a';
     }
 
+    function getValidationErrors(form) {
+        var raw = form.getAttribute('data-validation-errors') || '[]';
+        try {
+            var errors = JSON.parse(raw);
+            return Array.isArray(errors) ? errors.filter(Boolean) : [];
+        } catch (error) {
+            console.error(error);
+            return [];
+        }
+    }
+
     async function handleArchiveForm(event) {
         event.preventDefault();
 
@@ -196,8 +207,13 @@
         var type = typeInput ? typeInput.value : 'cms';
         var needsFrontend = type === 'frontend' || type === 'combined';
         var archive = null;
+        var validationErrors = getValidationErrors(form);
 
         try {
+            if (validationErrors.length > 0) {
+                throw new Error('Deploy nicht bereit: ' + validationErrors.join(', ') + '. Bitte zuerst den Serverzugang vervollständigen.');
+            }
+
             setBusy(form, true, 'Lokalen Agenten prüfen...');
             await pingLocalAgent();
 
