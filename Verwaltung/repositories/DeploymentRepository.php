@@ -50,6 +50,7 @@ class DeploymentRepository
 
     public function listByCustomer(int $customerId, int $limit = 20): array
     {
+        $limit = max(1, min($limit, 200));
         $stmt = $this->pdo->prepare(
             'SELECT d.id, d.customer_id, d.type, d.version_from, d.version_to, d.status, d.log,
                     d.triggered_by, d.started_at, d.finished_at, d.created_at,
@@ -63,9 +64,9 @@ class DeploymentRepository
              FROM deployments d
              WHERE d.customer_id = ?
              ORDER BY d.created_at DESC
-             LIMIT ?'
+             LIMIT ' . $limit
         );
-        $stmt->execute([$customerId, $limit]);
+        $stmt->execute([$customerId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return is_array($rows) ? $rows : [];
     }
