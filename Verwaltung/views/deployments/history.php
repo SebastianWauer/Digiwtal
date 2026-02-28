@@ -160,7 +160,7 @@ php Verwaltung/agent/server.php</code>
             <div class="table-wrap">
                 <table class="data-table">
                     <thead>
-                        <tr>
+                        <tr id="deployment-<?php echo (int)($d['id'] ?? 0); ?>">
                             <th>ID</th>
                             <th>Typ</th>
                             <th>Status</th>

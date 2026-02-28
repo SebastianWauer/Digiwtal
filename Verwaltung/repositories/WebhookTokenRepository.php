@@ -8,8 +8,34 @@ class WebhookTokenRepository
     public function listByCustomer(int $customerId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, customer_id, deploy_type, label, last_used_at, created_at
-             FROM webhook_tokens WHERE customer_id = ? ORDER BY id DESC'
+            'SELECT wt.id, wt.customer_id, wt.deploy_type, wt.label, wt.last_used_at, wt.created_at,
+                    (
+                        SELECT d.id
+                        FROM deployments d
+                        WHERE d.customer_id = wt.customer_id
+                          AND d.triggered_by = CONCAT("webhook_token:", wt.id)
+                        ORDER BY d.created_at DESC
+                        LIMIT 1
+                    ) AS last_deployment_id,
+                    (
+                        SELECT d.status
+                        FROM deployments d
+                        WHERE d.customer_id = wt.customer_id
+                          AND d.triggered_by = CONCAT("webhook_token:", wt.id)
+                        ORDER BY d.created_at DESC
+                        LIMIT 1
+                    ) AS last_deployment_status,
+                    (
+                        SELECT d.created_at
+                        FROM deployments d
+                        WHERE d.customer_id = wt.customer_id
+                          AND d.triggered_by = CONCAT("webhook_token:", wt.id)
+                        ORDER BY d.created_at DESC
+                        LIMIT 1
+                    ) AS last_deployment_created_at
+             FROM webhook_tokens wt
+             WHERE wt.customer_id = ?
+             ORDER BY wt.id DESC'
         );
         $stmt->execute([$customerId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

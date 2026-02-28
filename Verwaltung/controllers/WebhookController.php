@@ -69,7 +69,11 @@ class WebhookController
             }
         }
 
-        $deploymentId = $this->deploymentRepo->create($customerId, $deployType, 'webhook');
+        $deploymentId = $this->deploymentRepo->create(
+            $customerId,
+            $deployType,
+            'webhook_token:' . (int)$matched['id']
+        );
 
         try {
             $success = $this->deployService->run($deploymentId, $customerId, $deployType);

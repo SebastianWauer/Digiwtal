@@ -72,16 +72,48 @@ ob_start();
                             <th>Label</th>
                             <th>Typ</th>
                             <th>Zuletzt genutzt</th>
+                            <th>Letzter Deploy</th>
                             <th>Erstellt</th>
                             <th>Aktion</th>
                         </tr>
                     </thead>
                     <tbody>
                     <?php foreach ($tokens as $t): ?>
+                        <?php
+                        $lastDeploymentId = (int)($t['last_deployment_id'] ?? 0);
+                        $lastDeploymentStatus = trim((string)($t['last_deployment_status'] ?? ''));
+                        $lastDeploymentCreatedAt = trim((string)($t['last_deployment_created_at'] ?? ''));
+                        $lastDeploymentStatusClass = match ($lastDeploymentStatus) {
+                            'success' => 'healthy',
+                            'running' => 'degraded',
+                            'failed' => 'down',
+                            'rolled_back' => 'timeout',
+                            default => 'unknown',
+                        };
+                        ?>
                         <tr>
                             <td><?php echo htmlspecialchars((string)($t['label'] ?? ''), ENT_QUOTES); ?></td>
                             <td><span class="status-pill status-pill--unknown"><?php echo htmlspecialchars(strtoupper((string)($t['deploy_type'] ?? '')), ENT_QUOTES); ?></span></td>
                             <td class="text-muted"><?php echo htmlspecialchars((string)($t['last_used_at'] ?? '—'), ENT_QUOTES); ?></td>
+                            <td>
+                                <?php if ($lastDeploymentId > 0): ?>
+                                    <div>
+                                        <a class="link-action" href="/admin/customers/<?php echo (int)$customer['id']; ?>/deployments#deployment-<?php echo $lastDeploymentId; ?>">
+                                            Deploy #<?php echo $lastDeploymentId; ?>
+                                        </a>
+                                    </div>
+                                    <div>
+                                        <span class="status-pill status-pill--<?php echo $lastDeploymentStatusClass; ?>">
+                                            <?php echo htmlspecialchars($lastDeploymentStatus !== '' ? $lastDeploymentStatus : 'unknown', ENT_QUOTES); ?>
+                                        </span>
+                                    </div>
+                                    <div class="text-muted">
+                                        <?php echo htmlspecialchars($lastDeploymentCreatedAt !== '' ? $lastDeploymentCreatedAt : '—', ENT_QUOTES); ?>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-muted">Noch kein zugeordneter Deploy</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-muted"><?php echo htmlspecialchars((string)($t['created_at'] ?? ''), ENT_QUOTES); ?></td>
                             <td>
                                 <form method="POST" action="/admin/webhooks/<?php echo (int)$t['id']; ?>/delete" class="table-inline-form" onsubmit="return confirm('Token wirklich löschen?')">
