@@ -122,23 +122,6 @@ class DeployService
                     $uploaded += count($files);
                 }
                 $this->log($deploymentId, "[INFO] {$uploaded}/{$totalFiles} Dateien übertragen.");
-            } elseif ($method === 'shell_sftp') {
-                $uploaded = 0;
-                $totalFiles = 0;
-                foreach ($operations as $operation) {
-                    $files = $this->moduleCombinator->buildFileList($customerId, $operation['source_dir'], $operation['ignore']);
-                    $totalFiles += count($files);
-                    if ($files === []) {
-                        continue;
-                    }
-                    if (!$this->uploadFilesShellSftp($access, $password, $files, $operation['remote_path'])) {
-                        $this->log($deploymentId, "[ERROR] Shell-SFTP-Upload fehlgeschlagen für {$operation['label']}.");
-                        $this->deployRepo->markFinished($deploymentId, 'failed');
-                        return false;
-                    }
-                    $uploaded += count($files);
-                }
-                $this->log($deploymentId, "[INFO] {$uploaded}/{$totalFiles} Dateien übertragen.");
             } else {
                 // cURL FTP Fallback
                 $host = (string)($access['host'] ?? '');

@@ -64,6 +64,12 @@ php Verwaltung/agent/server.php</code>
     </section>
 
     <section class="surface">
+        <div class="hint-card hint-card--warning">
+            <strong>Wichtiger Hinweis zum Serverpasswort:</strong> Für lokale Agent-Deployments wird das im Serverzugang hinterlegte Passwort kurz an deinen Browser und von dort an den lokalen Agenten übergeben, damit dein Rechner die SFTP-Verbindung aufbauen kann.
+        </div>
+    </section>
+
+    <section class="surface">
         <div class="deploy-grid">
             <form method="POST" data-local-agent-form="1" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
