@@ -36,22 +36,44 @@ ob_start();
         <h2 class="section-title">Aktueller Status</h2>
         <?php if ($latestCheck): ?>
             <?php
-            $st = (string)($latestCheck['status'] ?? 'unknown');
-            $stClass = match ($st) {
+            $cmsStatus = (string)($latestCheck['cms_status'] ?? $latestCheck['status'] ?? 'unknown');
+            $frontendStatus = (string)($latestCheck['frontend_status'] ?? 'n/a');
+            $cmsClass = match ($cmsStatus) {
                 'healthy' => 'healthy',
                 'degraded' => 'degraded',
                 default => 'down',
             };
+            $frontendClass = match ($frontendStatus) {
+                'healthy' => 'healthy',
+                'degraded' => 'degraded',
+                'n/a' => 'unknown',
+                default => 'down',
+            };
             ?>
             <div class="stats-hero">
-                <div class="stats-hero__signal">
-                    <span class="stats-hero__signal-dot stats-hero__signal-dot--<?php echo $stClass; ?>"></span>
-                    <div class="stats-hero__signal-label"><?php echo htmlspecialchars(strtoupper($st), ENT_QUOTES); ?></div>
+                <div class="stats-hero__signal-group">
+                    <div class="stats-hero__signal">
+                        <span class="stats-hero__signal-dot stats-hero__signal-dot--<?php echo $cmsClass; ?>"></span>
+                        <div class="stats-hero__signal-label">CMS <?php echo htmlspecialchars(strtoupper($cmsStatus), ENT_QUOTES); ?></div>
+                    </div>
+                    <div class="stats-hero__signal">
+                        <span class="stats-hero__signal-dot stats-hero__signal-dot--<?php echo $frontendClass; ?>"></span>
+                        <div class="stats-hero__signal-label">Frontend <?php echo htmlspecialchars(strtoupper($frontendStatus), ENT_QUOTES); ?></div>
+                    </div>
                 </div>
                 <div class="detail-grid">
                     <div class="detail-item">
-                        <div class="detail-item__label">Response</div>
+                        <div class="detail-item__label">Response CMS</div>
                         <div class="detail-item__value"><?php echo (int)($latestCheck['response_ms'] ?? 0); ?>ms</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-item__label">Response Frontend</div>
+                        <div class="detail-item__value">
+                            <?php
+                            $frontendResponse = $latestCheck['frontend_response_ms'] ?? null;
+                            echo $frontendResponse !== null ? ((int)$frontendResponse . 'ms') : '—';
+                            ?>
+                        </div>
                     </div>
                     <div class="detail-item">
                         <div class="detail-item__label">CMS Version</div>
@@ -96,9 +118,11 @@ ob_start();
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Status</th>
+                            <th>CMS</th>
+                            <th>Frontend</th>
                             <th>Zeitpunkt</th>
-                            <th class="text-right">Response</th>
+                            <th class="text-right">Resp. CMS</th>
+                            <th class="text-right">Resp. Frontend</th>
                             <th>CMS</th>
                             <th>PHP</th>
                         </tr>
@@ -106,17 +130,31 @@ ob_start();
                     <tbody>
                     <?php foreach ($healthHistory as $hc): ?>
                         <?php
-                        $s = (string)($hc['status'] ?? 'unknown');
-                        $badgeClass = match ($s) {
+                        $cmsStatus = (string)($hc['cms_status'] ?? $hc['status'] ?? 'unknown');
+                        $frontendStatus = (string)($hc['frontend_status'] ?? 'n/a');
+                        $cmsBadgeClass = match ($cmsStatus) {
                             'healthy' => 'healthy',
                             'degraded' => 'degraded',
                             default => 'down',
                         };
+                        $frontendBadgeClass = match ($frontendStatus) {
+                            'healthy' => 'healthy',
+                            'degraded' => 'degraded',
+                            'n/a' => 'unknown',
+                            default => 'down',
+                        };
                         ?>
                         <tr>
-                            <td><span class="status-pill status-pill--<?php echo $badgeClass; ?>"><?php echo htmlspecialchars(strtoupper($s), ENT_QUOTES); ?></span></td>
+                            <td><span class="status-pill status-pill--<?php echo $cmsBadgeClass; ?>"><?php echo htmlspecialchars(strtoupper($cmsStatus), ENT_QUOTES); ?></span></td>
+                            <td><span class="status-pill status-pill--<?php echo $frontendBadgeClass; ?>"><?php echo htmlspecialchars(strtoupper($frontendStatus), ENT_QUOTES); ?></span></td>
                             <td class="text-muted"><?php echo htmlspecialchars((string)($hc['checked_at'] ?? ''), ENT_QUOTES); ?></td>
                             <td class="text-right mono"><?php echo (int)($hc['response_ms'] ?? 0); ?>ms</td>
+                            <td class="text-right mono">
+                                <?php
+                                $frontendHistoryResponse = $hc['frontend_response_ms'] ?? null;
+                                echo $frontendHistoryResponse !== null ? ((int)$frontendHistoryResponse . 'ms') : '—';
+                                ?>
+                            </td>
                             <td class="text-muted"><?php echo htmlspecialchars((string)($hc['cms_version'] ?? '—'), ENT_QUOTES); ?></td>
                             <td class="text-muted"><?php echo htmlspecialchars((string)($hc['php_version'] ?? '—'), ENT_QUOTES); ?></td>
                         </tr>

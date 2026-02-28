@@ -30,6 +30,13 @@
   flex-wrap: wrap;
 }
 
+.stats-hero__signal-group {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .stats-hero__signal {
   min-width: 92px;
   text-align: center;
