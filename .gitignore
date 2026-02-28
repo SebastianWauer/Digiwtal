@@ -27,5 +27,12 @@ upload.sh
 
 # Webserver overrides
 .htaccess
+*.user.ini
+
+# Local certs / debug helpers
+Verwaltung/agent/certs/*.crt
+Verwaltung/agent/certs/*.key
+Verwaltung/public/phpinfo.php
+Verwaltung/public/.user.ini
 
 DIGIWTAL_Systemarchitektur_Final.md
