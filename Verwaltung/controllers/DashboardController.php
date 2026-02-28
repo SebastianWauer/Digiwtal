@@ -16,19 +16,27 @@ class DashboardController
         
         $customers = $this->customerRepo->listAllWithHealth();
         
-        // Ampel-Logik
         foreach ($customers as &$customer) {
             $isActive = (int)($customer['is_active'] ?? 0) === 1;
             $status = (string)($customer['health_status'] ?? 'unknown');
+            $lastSuccessfulHealthAt = (string)($customer['last_successful_health_at'] ?? '');
+            $staleHealth = true;
+
+            if ($lastSuccessfulHealthAt !== '') {
+                $successfulTs = strtotime($lastSuccessfulHealthAt);
+                $staleHealth = $successfulTs === false || (time() - $successfulTs) > 1800;
+            }
+
+            $customer['stale_health'] = $staleHealth;
             
             if (!$isActive) {
                 $customer['ampel'] = 'red';
-            } elseif ($status === 'healthy') {  // CHANGED from 'online'
+            } elseif ($status === 'healthy' && !$staleHealth) {
                 $customer['ampel'] = 'green';
-            } elseif ($status === 'degraded') {
+            } elseif ($status === 'degraded' || $staleHealth) {
                 $customer['ampel'] = 'yellow';
             } else {
-                $customer['ampel'] = 'red';  // unknown, down, timeout, offline
+                $customer['ampel'] = 'red';
             }
         }
         unset($customer);

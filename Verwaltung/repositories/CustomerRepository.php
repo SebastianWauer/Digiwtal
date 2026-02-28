@@ -18,10 +18,38 @@ class CustomerRepository
                 c.created_at, c.updated_at,
                 COALESCE(hc.status, 'unknown') AS health_status,
                 hc.checked_at AS last_check_at,
+                (
+                    SELECT checked_at
+                    FROM health_checks
+                    WHERE customer_id = c.id AND status = 'healthy'
+                    ORDER BY checked_at DESC
+                    LIMIT 1
+                ) AS last_successful_health_at,
                 hc.cms_version,
                 hc.response_ms,
                 hc.php_version,
-                hc.raw_response
+                hc.raw_response,
+                (
+                    SELECT d.created_at
+                    FROM deployments d
+                    WHERE d.customer_id = c.id
+                    ORDER BY d.created_at DESC
+                    LIMIT 1
+                ) AS last_deploy_at,
+                (
+                    SELECT d.status
+                    FROM deployments d
+                    WHERE d.customer_id = c.id
+                    ORDER BY d.created_at DESC
+                    LIMIT 1
+                ) AS last_deploy_status,
+                (
+                    SELECT d.type
+                    FROM deployments d
+                    WHERE d.customer_id = c.id
+                    ORDER BY d.created_at DESC
+                    LIMIT 1
+                ) AS last_deploy_type
             FROM customers c
             LEFT JOIN health_checks hc ON hc.id = (
                 SELECT id FROM health_checks
