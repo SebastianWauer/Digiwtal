@@ -21,7 +21,9 @@ ob_start();
                 </div>
             </div>
             <div class="page-actions">
-                <a class="btn btn--info btn--sm" href="/admin/customers/<?php echo (int)$customer['id']; ?>/edit">Bearbeiten</a>
+                <?php if (($_SESSION['admin_role'] ?? '') === 'superadmin'): ?>
+                    <a class="btn btn--info btn--sm" href="/admin/customers/<?php echo (int)$customer['id']; ?>/edit">Bearbeiten</a>
+                <?php endif; ?>
                 <a class="btn btn--warning btn--sm" href="/admin/customers/<?php echo (int)$customer['id']; ?>/deployments">Deploy</a>
                 <a class="btn btn--secondary btn--sm" href="/admin/customers/<?php echo (int)$customer['id']; ?>/access">Zugang</a>
                 <a class="btn btn--success btn--sm" href="/admin/customers/<?php echo (int)$customer['id']; ?>/webhooks">Webhooks</a>

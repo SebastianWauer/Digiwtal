@@ -10,7 +10,9 @@ ob_start();
                 <p class="page-subtitle">Stammdaten, Health-Signale und Zugriffe pro Kunde verwalten.</p>
             </div>
             <div class="page-actions">
-                <a class="btn btn--primary btn--sm" href="/admin/customers/create">Neuer Kunde</a>
+                <?php if (($_SESSION['admin_role'] ?? '') === 'superadmin'): ?>
+                    <a class="btn btn--primary btn--sm" href="/admin/customers/create">Neuer Kunde</a>
+                <?php endif; ?>
                 <a class="btn btn--secondary btn--sm" href="/admin/dashboard">Dashboard</a>
             </div>
         </header>
@@ -92,17 +94,21 @@ ob_start();
                             </td>
                             <td class="text-right">
                                 <div class="table-actions">
-                                    <a class="link-action link-action--info" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/edit">Bearbeiten</a>
+                                    <?php if (($_SESSION['admin_role'] ?? '') === 'superadmin'): ?>
+                                        <a class="link-action link-action--info" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/edit">Bearbeiten</a>
+                                    <?php endif; ?>
                                     <a class="link-action" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/modules">Module</a>
                                     <a class="link-action link-action--success" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/vault">Tresor</a>
                                     <a class="link-action link-action--info" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/access">Zugang</a>
                                     <a class="link-action link-action--warning" href="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/deployments">Deploy</a>
-                                    <form method="POST" action="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/toggle" class="table-inline-form">
-                                        <?php echo Csrf::field(); ?>
-                                        <button type="submit" class="btn btn--linkish link-action link-action--danger">
-                                            <?php echo ((int)($c['is_active'] ?? 0) === 1) ? 'Deaktivieren' : 'Aktivieren'; ?>
-                                        </button>
-                                    </form>
+                                    <?php if (($_SESSION['admin_role'] ?? '') === 'superadmin'): ?>
+                                        <form method="POST" action="/admin/customers/<?php echo (int)($c['id'] ?? 0); ?>/toggle" class="table-inline-form">
+                                            <?php echo Csrf::field(); ?>
+                                            <button type="submit" class="btn btn--linkish link-action link-action--danger">
+                                                <?php echo ((int)($c['is_active'] ?? 0) === 1) ? 'Deaktivieren' : 'Aktivieren'; ?>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>

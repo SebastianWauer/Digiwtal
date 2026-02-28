@@ -44,6 +44,7 @@ class CustomerController
     public function create(): void
     {
         AdminAuth::requireAuth();
+        $this->requireSuperadmin();
 
         $errors = $_SESSION['flash_errors'] ?? [];
         $old    = $_SESSION['flash_old']    ?? [];
@@ -55,6 +56,7 @@ class CustomerController
     public function store(): void
     {
         AdminAuth::requireAuth();
+        $this->requireSuperadmin();
 
         if (!Csrf::verify($_POST['csrf_token'] ?? '')) {
             $_SESSION['flash_errors'] = ['CSRF token invalid'];
@@ -113,6 +115,7 @@ class CustomerController
     public function edit(int $id): void
     {        
         AdminAuth::requireAuth();
+        $this->requireSuperadmin();
 
         $customer = $this->customerRepo->findById($id);
         if ($customer === null) {
@@ -136,6 +139,7 @@ class CustomerController
     public function update(int $id): void
     {
         AdminAuth::requireAuth();
+        $this->requireSuperadmin();
 
         if (!Csrf::verify($_POST['csrf_token'] ?? '')) {
             $_SESSION['flash_errors'] = ['CSRF token invalid'];
@@ -193,6 +197,7 @@ class CustomerController
     public function toggle(int $id): void
     {
         AdminAuth::requireAuth();
+        $this->requireSuperadmin();
 
         if (!Csrf::verify($_POST['csrf_token'] ?? '')) {
             $_SESSION['flash_errors'] = ['CSRF token invalid'];
@@ -213,5 +218,17 @@ class CustomerController
         $_SESSION['flash_success'] = 'Kundenstatus geändert.';
         header('Location: /admin/customers');
         exit;
+    }
+
+    private function requireSuperadmin(): void
+    {
+        if (($_SESSION['admin_role'] ?? 'operator') !== 'superadmin') {
+            http_response_code(403);
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>403</title></head>'
+                . '<body><main><h1>403 - Kein Zugriff</h1>'
+                . '<p>Nur Superadmins dürfen Kunden anlegen oder verändern.</p>'
+                . '<p><a href="/admin/customers">Zurück zur Kundenübersicht</a></p></main></body></html>';
+            exit;
+        }
     }
 }
