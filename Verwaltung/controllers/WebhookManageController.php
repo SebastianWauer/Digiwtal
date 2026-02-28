@@ -20,7 +20,13 @@ class WebhookManageController
             exit;
         }
 
-        $tokens = $this->webhookRepo->listByCustomer($customerId);
+        try {
+            $tokens = $this->webhookRepo->listByCustomer($customerId);
+        } catch (Throwable $e) {
+            error_log('[WEBHOOK_MANAGE] ' . $e->getMessage());
+            $tokens = [];
+            $_SESSION['flash_errors'] = ['Webhook-Tokens konnten nicht geladen werden. Bitte SQL-Fehler im Server-Log prüfen.'];
+        }
         $success = $_SESSION['flash_success'] ?? null;
         $errors = $_SESSION['flash_errors'] ?? [];
         $newToken = $_SESSION['flash_new_token'] ?? null;

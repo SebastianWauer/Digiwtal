@@ -13,7 +13,7 @@ class WebhookTokenRepository
                         SELECT d.id
                         FROM deployments d
                         WHERE d.customer_id = wt.customer_id
-                          AND d.triggered_by = CONCAT("webhook_token:", wt.id)
+                          AND d.triggered_by = CONCAT(\'webhook_token:\', wt.id)
                         ORDER BY d.created_at DESC
                         LIMIT 1
                     ) AS last_deployment_id,
@@ -21,7 +21,7 @@ class WebhookTokenRepository
                         SELECT d.status
                         FROM deployments d
                         WHERE d.customer_id = wt.customer_id
-                          AND d.triggered_by = CONCAT("webhook_token:", wt.id)
+                          AND d.triggered_by = CONCAT(\'webhook_token:\', wt.id)
                         ORDER BY d.created_at DESC
                         LIMIT 1
                     ) AS last_deployment_status,
@@ -29,7 +29,7 @@ class WebhookTokenRepository
                         SELECT d.created_at
                         FROM deployments d
                         WHERE d.customer_id = wt.customer_id
-                          AND d.triggered_by = CONCAT("webhook_token:", wt.id)
+                          AND d.triggered_by = CONCAT(\'webhook_token:\', wt.id)
                         ORDER BY d.created_at DESC
                         LIMIT 1
                     ) AS last_deployment_created_at
