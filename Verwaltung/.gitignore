@@ -1,0 +1,16 @@
+# Laufzeit-Daten
+storage/
+storage/backups/
+storage/logs/
+
+# Umgebung
+.env
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# IDE
+.idea/
+.vscode/
+*.swp

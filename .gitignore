@@ -1,0 +1,31 @@
+# macOS metadata
+.DS_Store
+._*
+__MACOSX/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# Secrets
+.env
+
+# Runtime / logs / backups
+storage/
+storage/backups/
+storage/logs/
+
+# PHP / Composer
+vendor/
+composer
+.phpunit.result.cache
+
+# Archives / deploy helpers
+*.zip
+upload.sh
+
+# Webserver overrides
+.htaccess
+
+DIGIWTAL_Systemarchitektur_Final.md

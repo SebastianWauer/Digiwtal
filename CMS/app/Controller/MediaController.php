@@ -1,0 +1,733 @@
+<?php
+declare(strict_types=1);
+
+namespace App\Controller;
+
+use App\Repositories\MediaRepositoryDb;
+use App\Repositories\MediaFolderRepositoryDb;
+use App\Repositories\MediaUsageRepositoryDb;
+use App\Services\MediaService;
+
+final class MediaController
+{
+    private function deps(array $user): array
+    {
+        $theme = \admin_theme_for_user((int)($user['id'] ?? 0));
+        $pdo   = \admin_pdo();
+
+        $media   = new MediaRepositoryDb($pdo);
+        $folders = new MediaFolderRepositoryDb($pdo);
+        $usages  = new MediaUsageRepositoryDb($pdo);
+
+        $service = new MediaService($pdo, $media, $folders);
+
+        return [$user, $theme, $pdo, $media, $folders, $usages, $service];
+    }
+
+    private function json(int $code, array $payload): void
+    {
+        http_response_code($code);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function index(): void
+    {
+        $user = \admin_require_perm('media.view');
+        [$user, $theme, $_pdo, $mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        $folderId   = isset($_GET['folder']) ? (int)$_GET['folder'] : 0;
+        $q          = trim((string)($_GET['q'] ?? ''));
+        $ext        = trim((string)($_GET['ext'] ?? ''));
+        $onlyUnused = (string)($_GET['unused'] ?? '') === '1';
+
+        // ✅ GET > Pref > Default
+        $view = (string)($_GET['view'] ?? '');
+        if ($view === '') {
+            $view = \admin_get_pref((int)($user['id'] ?? 0), 'media.view', 'grid');
+        }
+        $view = ($view === 'list') ? 'list' : 'grid'; // grid|list
+
+        // ✅ Persistiere explizite Auswahl aus GET als User-Pref
+        if ((string)($_GET['view'] ?? '') !== '') {
+            \admin_set_pref((int)($user['id'] ?? 0), 'media.view', $view);
+        }
+
+        if ($folderId <= 0) $folderId = 0;
+
+        $rows = $mediaRepo->listActive($folderId, $q, $ext, $onlyUnused, 200, 0);
+
+        $folders = $folderRepo->listAll();
+        $flash = $_SESSION['flash'] ?? null;
+        unset($_SESSION['flash']);
+        
+        if (!empty($_GET['picker'])) {
+            $title = 'Medien';
+            $pageCss = 'media-list';
+
+            \define('ADMIN_HIDE_SIDEBAR', true);
+
+            \admin_layout_begin([
+                'title'    => 'Medien',
+                'theme'    => $theme,
+                'active'   => null,
+                'user'     => $user,
+                'pageCss'  => 'media-list',
+                'headline' => 'Medien',
+                'subtitle' => null,
+            ]);
+
+            require __DIR__ . '/../Views/media_list.php';
+
+            \admin_layout_end();
+            return;
+        }
+
+        \admin_layout_begin([
+            'title'    => 'Medien',
+            'theme'    => $theme,
+            'active'   => 'media',
+            'user'     => $user,
+            'next'     => '/',
+            'pageCss'  => 'media-list',
+            'headline' => 'Medien',
+            'subtitle' => 'Dateien hochladen, organisieren und verwenden.',
+        ]);
+
+        require __DIR__ . '/../Views/media_list.php';
+
+        \admin_layout_end();
+
+    }
+
+    public function deleted(): void
+    {
+        $user = \admin_require_perm('media.delete');
+        [$user, $theme, $_pdo, $mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        $q    = trim((string)($_GET['q'] ?? ''));
+        $ext  = trim((string)($_GET['ext'] ?? ''));
+
+        // ✅ GET > Pref > Default
+        $view = (string)($_GET['view'] ?? '');
+        if ($view === '') {
+            $view = \admin_get_pref((int)($user['id'] ?? 0), 'media.view', 'list');
+        }
+        $view = ($view === 'grid') ? 'grid' : 'list';
+
+        // ✅ Persistiere explizite Auswahl aus GET als User-Pref
+        if ((string)($_GET['view'] ?? '') !== '') {
+            \admin_set_pref((int)($user['id'] ?? 0), 'media.view', $view);
+        }
+
+        $rows = $mediaRepo->listDeleted($q, $ext, 300, 0);
+
+        $folders = $folderRepo->listAll();
+        $flash = $_SESSION['flash'] ?? null;
+        unset($_SESSION['flash']);
+
+        \admin_layout_begin([
+            'title'    => 'Papierkorb – Medien',
+            'theme'    => $theme,
+            'active'   => 'media',
+            'user'     => $user,
+            'next'     => '/media',
+            'pageCss'  => 'media-list',
+            'headline' => 'Gelöschte Medien',
+            'subtitle' => 'Wiederherstellen oder endgültig löschen.',
+        ]);
+
+        require __DIR__ . '/../Views/media_deleted.php';
+
+        \admin_layout_end();
+    }
+
+    public function show(): void
+    {
+        $user = \admin_require_perm('media.view');
+        [$user, $theme, $_pdo, $mediaRepo, $folderRepo, $usageRepo, $_service] = $this->deps($user);
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            http_response_code(400);
+            echo 'Bad Request';
+            return;
+        }
+
+        $row = $mediaRepo->findById($id);
+        if (!$row) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $folders = $folderRepo->listAll();
+        $usages  = $usageRepo->listForMedia($id);
+
+        $flash = $_SESSION['flash'] ?? null;
+        unset($_SESSION['flash']);
+
+        \admin_layout_begin([
+            'title'    => 'Medium',
+            'theme'    => $theme,
+            'active'   => 'media',
+            'user'     => $user,
+            'next'     => '/media',
+            'pageCss'  => 'media-edit',
+            'headline' => 'Medium',
+            'subtitle' => 'Metadaten & Verwendungen.',
+        ]);
+
+        $canEdit = (function_exists('admin_can') && admin_can('media.edit'));
+        $canDelete = (function_exists('admin_can') && admin_can('media.delete'));
+
+        require __DIR__ . '/../Views/media_show.php';
+
+        \admin_layout_end();
+    }
+
+    public function edit(): void
+    {
+        $user = \admin_require_perm('media.edit');
+        [$user, $theme, $_pdo, $mediaRepo, $folderRepo, $usageRepo, $_service] = $this->deps($user);
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            http_response_code(400);
+            echo 'Bad Request';
+            return;
+        }
+
+        $row = $mediaRepo->findById($id);
+        if (!$row) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $folders = $folderRepo->listAll();
+        $usages  = $usageRepo->listForMedia($id);
+
+        $flash = $_SESSION['flash'] ?? null;
+        unset($_SESSION['flash']);
+
+        \admin_layout_begin([
+            'title'    => 'Medium bearbeiten',
+            'theme'    => $theme,
+            'active'   => 'media',
+            'user'     => $user,
+            'next'     => '/media',
+            'pageCss'  => 'media-edit',
+            'headline' => 'Medium bearbeiten',
+            'subtitle' => 'Metadaten pflegen & Verwendungen prüfen.',
+        ]);
+
+        $canEdit = (function_exists('admin_can') && admin_can('media.edit'));
+        require __DIR__ . '/../Views/media_edit.php';
+
+        \admin_layout_end();
+    }
+
+    public function upload(): void
+    {
+        $user = \admin_require_perm('media.upload');
+        [$user, $_theme, $_pdo, $_mediaRepo, $folderRepo, $_usageRepo, $service] = $this->deps($user);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Method Not Allowed'];
+            header('Location: /media');
+            exit;
+        }
+
+        \admin_verify_csrf();
+
+        $folderId = (int)($_POST['folder_id'] ?? 0);
+        if ($folderId <= 0) $folderId = 1;
+
+        if (!$folderRepo->findById($folderId)) {
+            $folderId = 1;
+        }
+
+        if (!$folderRepo->findById($folderId)) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Invalid folder'];
+            header('Location: /media');
+            exit;
+        }
+
+        if (!isset($_FILES['files'])) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'No files uploaded'];
+            header('Location: /media');
+            exit;
+        }
+
+        try {
+            $ids = $service->uploadFromFilesGlobal($_FILES['files'], $folderId);
+            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Upload erfolgreich (' . count($ids) . ' Datei(en)).'];
+        } catch (\Throwable $e) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => $e->getMessage()];
+        }
+
+        header('Location: /media?folder=' . $folderId);
+        exit;
+    }
+
+    public function folderCreate(): void
+    {
+        $user = \admin_require_perm('media.edit');
+        [$user, $theme, $_pdo, $_mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Method Not Allowed'];
+            header('Location: /media');
+            exit;
+        }
+
+        \admin_verify_csrf();
+
+        $parentId = (int)($_POST['parent_id'] ?? 1);
+        if ($parentId <= 0) $parentId = 1;
+
+        $name = trim((string)($_POST['name'] ?? ''));
+        if ($name === '') {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordnername fehlt.'];
+            header('Location: /media?folder=' . $parentId);
+            exit;
+        }
+
+        $existingFolder = $folderRepo->findByParentAndName($parentId, $name);
+        if ($existingFolder) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordnername bereits vergeben.'];
+            header('Location: /media?folder=' . $parentId);
+            exit;
+        }
+
+        $folderId = $folderRepo->createFolder($parentId, $name);
+        if ($folderId > 0) {
+            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Ordner wurde erfolgreich erstellt.'];
+        } else {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Fehler beim Erstellen des Ordners.'];
+        }
+
+        header('Location: /media?folder=' . $parentId);
+        exit;
+    }
+
+    public function save(): void
+    {
+        $user = \admin_require_perm('media.edit');
+        [$user, $_theme, $_pdo, $mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Method Not Allowed'];
+            header('Location: /media');
+            exit;
+        }
+
+        \admin_verify_csrf();
+
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Invalid ID'];
+            header('Location: /media');
+            exit;
+        }
+
+        $row = $mediaRepo->findById($id);
+        if (!$row) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Not found'];
+            header('Location: /media');
+            exit;
+        }
+
+        $folderId = (int)($_POST['folder_id'] ?? 0);
+        if ($folderId <= 0 || !$folderRepo->findById($folderId)) {
+            $folderId = (int)($row['folder_id'] ?? 1);
+        }
+
+        $display = $this->sanitizeDisplay((string)($_POST['display_filename'] ?? (string)($row['display_filename'] ?? '')));
+        if ($display === '') $display = (string)($row['display_filename'] ?? '');
+
+        $title = trim((string)($_POST['title'] ?? ''));
+        $alt = trim((string)($_POST['alt_text'] ?? ''));
+        $desc = trim((string)($_POST['description'] ?? ''));
+
+        $focusX = $_POST['focus_x'] ?? null;
+        $focusY = $_POST['focus_y'] ?? null;
+
+        $fx = null;
+        if ($focusX !== null && $focusX !== '') {
+            $t = (float)$focusX;
+            if ($t < -1.0) $t = -1.0;
+            if ($t > 1.0) $t = 1.0;
+            $fx = $t;
+        }
+
+        $fy = null;
+        if ($focusY !== null && $focusY !== '') {
+            $t = (float)$focusY;
+            if ($t < -1.0) $t = -1.0;
+            if ($t > 1.0) $t = 1.0;
+            $fy = $t;
+        }
+
+        try {
+            $mediaRepo->updateMeta($id, [
+                'folder_id'        => $folderId,
+                'display_filename' => $display,
+                'title'            => ($title === '' ? null : $title),
+                'alt_text'         => ($alt === '' ? null : $alt),
+                'description'      => ($desc === '' ? null : $desc),
+                'focus_x'          => $fx,
+                'focus_y'          => $fy,
+            ]);
+
+            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Gespeichert.'];
+        } catch (\Throwable $e) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => $e->getMessage()];
+        }
+
+        header('Location: /media/edit?id=' . $id);
+        exit;
+    }
+
+    public function delete(): void
+    {
+        $user = \admin_require_perm('media.delete');
+        [$user, $_theme, $_pdo, $mediaRepo, $_folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Method Not Allowed'];
+            header('Location: /media');
+            exit;
+        }
+
+        \admin_verify_csrf();
+
+        $idsRaw = $_POST['id'] ?? [];
+        if (!is_array($idsRaw)) {
+            $idsRaw = [$idsRaw];
+        }
+
+        $ids = array_values(array_filter(array_map('intval', $idsRaw), static fn($v) => $v > 0));
+        if (!$ids) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Keine Medien ausgewählt.'];
+            header('Location: /media');
+            exit;
+        }
+
+        $deleted = $mediaRepo->softDeleteUnusedBulk($ids);
+
+        $_SESSION['flash'] = ($deleted > 0)
+            ? ['type' => 'success', 'msg' => $deleted . ' Medium/Medien in Papierkorb verschoben.']
+            : ['type' => 'error', 'msg' => 'Konnte nicht gelöscht werden'];
+
+        header('Location: /media');
+        exit;
+    }
+
+    public function restore(): void
+    {
+        $user = \admin_require_perm('media.delete');
+        [$user, $_theme, $_pdo, $mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+            http_response_code(405);
+            echo 'Method Not Allowed';
+            return;
+        }
+
+        \admin_verify_csrf();
+
+        $ids = $_POST['id'] ?? [];
+        if (!is_array($ids)) $ids = [$ids];
+
+        $ids = array_values(array_filter(array_map('intval', $ids), static fn($v) => $v > 0));
+        if (!$ids) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Keine Medien ausgewählt.'];
+            header('Location: /media/deleted');
+            exit;
+        }
+
+        $ok = 0;
+
+        foreach ($ids as $id) {
+            $row = $mediaRepo->findById((int)$id);
+            if (!$row) {
+                continue;
+            }
+
+            $fid = (int)($row['folder_id'] ?? 1);
+            if ($fid <= 0 || !$folderRepo->findById($fid)) {
+                $mediaRepo->moveToFolder((int)$id, 1);
+            }
+
+            if ($mediaRepo->restore((int)$id)) {
+                $ok++;
+            }
+        }
+
+        $_SESSION['flash'] = ($ok > 0)
+            ? ['type'=>'success', 'msg'=> $ok . ' Medium/Medien wiederhergestellt.']
+            : ['type'=>'error', 'msg'=> 'Wiederherstellen nicht möglich.'];
+
+        $view = $_GET['view'] ?? 'grid';
+        $folderId = $_GET['folder'] ?? 0;
+
+        header('Location: /media?view=' . urlencode((string)$view) . '&folder=' . urlencode((string)$folderId));
+        exit;
+    }
+
+    public function move(): void
+    {
+        $user = \admin_require_perm('media.edit');
+        [$user, $_theme, $_pdo, $mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(405, ['ok' => false, 'error' => 'Method Not Allowed']);
+            return;
+        }
+
+        \admin_verify_csrf();
+
+        $mediaId  = (int)($_POST['media_id'] ?? 0);
+        $folderId = (int)($_POST['folder_id'] ?? 0);
+
+        if ($mediaId <= 0 || $folderId <= 0) {
+            $this->json(400, ['ok' => false, 'error' => 'Invalid parameters']);
+            return;
+        }
+
+        if (!$folderRepo->findById($folderId)) {
+            $this->json(404, ['ok' => false, 'error' => 'Folder not found']);
+            return;
+        }
+
+        $row = $mediaRepo->findById($mediaId);
+        if (!$row) {
+            $this->json(404, ['ok' => false, 'error' => 'Media not found']);
+            return;
+        }
+
+        if ((int)($row['is_deleted'] ?? 0) === 1) {
+            $this->json(409, ['ok' => false, 'error' => 'Media is deleted']);
+            return;
+        }
+
+        $ok = $mediaRepo->moveToFolder($mediaId, $folderId);
+        if (!$ok) {
+            $this->json(500, ['ok' => false, 'error' => 'Move failed']);
+            return;
+        }
+
+        $this->json(200, ['ok' => true]);
+    }
+
+    public function file(): void
+    {
+        $user = \admin_require_login();
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+        if (!\admin_can('media.view')) {
+            try {
+                $pdo = db();
+                $stmt = $pdo->prepare("
+                    SELECT 1
+                    FROM site_settings
+                    WHERE `key` IN ('cms_logo_light_media_id','cms_logo_dark_media_id','favicon_media_id')
+                      AND `value` = :id
+                    LIMIT 1
+                ");
+                $stmt->execute([':id' => (string)$id]);
+                $ok = (bool)$stmt->fetchColumn();
+            } catch (\Throwable $e) {
+                $ok = false;
+            }
+
+            if (!$ok) {
+                http_response_code(403);
+                echo 'Forbidden';
+                return;
+            }
+        }
+
+        [$user, $_theme, $_pdo, $mediaRepo, $_folderRepo, $_usageRepo, $service] = $this->deps($user);
+
+        $row = $mediaRepo->findById($id);
+        if (!$row || (int)($row['is_deleted'] ?? 0) === 1) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $path = $service->getStoragePathForMedia($row);
+        if (!is_file($path)) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $mime = (string)($row['mime'] ?? 'application/octet-stream');
+        $ext  = (string)($row['ext'] ?? '');
+
+        header('X-Content-Type-Options: nosniff');
+        header('Referrer-Policy: no-referrer');
+
+        if ($ext === 'svg') {
+            header("Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'none'; sandbox");
+            header('Content-Type: image/svg+xml; charset=UTF-8');
+        } else {
+            header('Content-Type: ' . $mime);
+        }
+
+        header('Content-Length: ' . (string)filesize($path));
+        header('Content-Disposition: inline; filename="' . $this->safeHeaderFilename((string)($row['original_filename'] ?? 'file')) . '"');
+
+        readfile($path);
+        exit;
+    }
+
+    public function thumb(): void
+    {
+        $user = \admin_require_login();
+        [$user, $_theme, $_pdo, $mediaRepo, $_folderRepo, $_usageRepo, $service] = $this->deps($user);
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $row = $mediaRepo->findById($id);
+        if (!$row) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $isDeleted = ((int)($row['is_deleted'] ?? 0) === 1);
+
+        if ($isDeleted) {
+            if (!\admin_can('media.delete')) {
+                http_response_code(404);
+                echo 'Not Found';
+                return;
+            }
+        } else {
+            if (!\admin_can('media.view')) {
+                http_response_code(404);
+                echo 'Not Found';
+                return;
+            }
+        }
+
+        $path = $service->getStoragePathForMedia($row);
+        if (!is_file($path)) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $mime = (string)($row['mime'] ?? 'application/octet-stream');
+        $ext  = (string)($row['ext'] ?? '');
+
+        header('X-Content-Type-Options: nosniff');
+        header('Referrer-Policy: no-referrer');
+
+        if ($ext === 'svg') {
+            header("Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'none'; sandbox");
+            header('Content-Type: image/svg+xml; charset=UTF-8');
+        } else {
+            header('Content-Type: ' . $mime);
+        }
+
+        header('Content-Length: ' . (string)filesize($path));
+        header('Content-Disposition: inline; filename="' . $this->safeHeaderFilename((string)($row['original_filename'] ?? 'file')) . '"');
+
+        readfile($path);
+        exit;
+    }
+    
+    public function purge(): void
+    {
+        $user = \admin_require_perm('media.delete');
+        [$user, $_theme, $_pdo, $mediaRepo, $_folderRepo, $_usageRepo, $service] = $this->deps($user);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo 'Method Not Allowed';
+            return;
+        }
+
+        \admin_verify_csrf();
+
+        $rows = $mediaRepo->listDeletedForPurge();
+        if (!$rows) {
+            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Papierkorb ist bereits leer.'];
+            header('Location: /media/deleted');
+            exit;
+        }
+
+        $ids = [];
+        $paths = [];
+
+        foreach ($rows as $r) {
+            if (!is_array($r)) continue;
+            $id = (int)($r['id'] ?? 0);
+            if ($id <= 0) continue;
+
+            $sf = (string)($r['storage_filename'] ?? '');
+            if ($sf !== '') {
+                $paths[] = rtrim($service->mediaStorageDir(), '/') . '/' . ltrim($sf, '/');
+            }
+
+            $ids[] = $id;
+        }
+
+        // 1) DB löschen (CASCADE löscht media_usages automatisch)
+        $n = $mediaRepo->purgeDeletedByIds($ids);
+
+        // 2) Dateien löschen (best effort; fehlende Dateien sind ok)
+        foreach ($paths as $p) {
+            if (is_file($p)) {
+                @unlink($p);
+            }
+        }
+
+        $_SESSION['flash'] = ($n > 0)
+            ? ['type' => 'success', 'msg' => 'Papierkorb geleert (' . $n . ').']
+            : ['type' => 'success', 'msg' => 'Papierkorb ist bereits leer.'];
+
+        header('Location: /media/deleted');
+        exit;
+    }
+
+    private function safeHeaderFilename(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '') $name = 'file';
+        $name = str_replace(["\r", "\n", '"'], ['', '', ''], $name);
+        return $name;
+    }
+
+    private function sanitizeDisplay(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '') return '';
+        $name = str_replace(["\r", "\n", "\t"], ' ', $name);
+        $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
+        $name = trim($name);
+        $name = str_replace(['\\', '/'], '', $name);
+        $name = str_replace(['..'], '', $name);
+        return $name;
+    }
+}

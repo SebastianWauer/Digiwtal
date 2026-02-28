@@ -1,0 +1,194 @@
+/* admin-pages-edit.css – nur page-spezifisch */
+
+.pages-edit-layout{
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.pages-edit-card{
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.pages-edit-card-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pages-edit-card-title{
+  font-weight: 850;
+  letter-spacing: 0.2px;
+}
+
+.pages-edit-card-sub{
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pages-edit-url{
+  text-align: right;
+  display:flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pages-edit-fields{
+  display:flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pages-edit-field-label{
+  font-weight: 750;
+  margin-bottom: 6px;
+}
+
+.pages-edit-field-hint{
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.pages-edit-input,
+.pages-edit-textarea{
+  width: 100%;
+  border: 1px solid var(--btn-border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.pages-edit-input:focus,
+.pages-edit-textarea:focus{
+  border-color: var(--outline);
+}
+
+.pages-edit-textarea{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.35;
+  min-height: 260px;
+  resize: vertical;
+}
+
+.pages-edit-grid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pages-edit-grid2--compact{
+  margin-top: 6px;
+}
+
+.pages-edit-check{
+  display:inline-flex;
+  gap: 10px;
+  align-items:center;
+  font-size: 14px;
+}
+
+.pages-edit-actionsbar{
+  margin-top: 14px;
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pages-edit-actionsbar-spacer{
+  flex: 1;
+  min-width: 10px;
+}
+
+/* --------------------------------------------------
+   Ergänzungen für PageBuilder + Raw JSON + Block UI
+   (ersetzt Inline-Styles aus pages_edit.php)
+-------------------------------------------------- */
+
+.pages-edit-sep{
+  margin: 16px 0;
+  opacity: .25;
+  border: 0;
+  border-top: 1px solid var(--card-border);
+}
+
+.pages-edit-pb-title{
+  margin-bottom: 8px;
+}
+
+.pages-edit-pb-sub{
+  margin-bottom: 12px;
+}
+
+.pages-edit-pb-actions{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.pages-edit-pb-readonly{
+  margin-bottom: 12px;
+}
+
+/* Raw JSON */
+.pages-edit-raw{
+  margin-top: 12px;
+}
+
+.pages-edit-raw__summary{
+  cursor: pointer;
+  user-select: none;
+}
+
+.pages-edit-raw__textarea{
+  margin-top: 8px;
+}
+
+/* Block-Karten im Builder */
+.pages-edit-blockcard{
+  margin-top: 12px;
+}
+
+/* Block Header: linker Teil (Label + Meta) */
+.pages-edit-blockhead-left{
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.pages-edit-blockhead-meta{
+  opacity: .7;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Block Header: Buttons rechts */
+.pages-edit-blockhead-actions{
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Responsive */
+@media (max-width: 980px){
+  .pages-edit-layout{
+    grid-template-columns: 1fr;
+  }
+  .pages-edit-url{
+    text-align:left;
+  }
+}
