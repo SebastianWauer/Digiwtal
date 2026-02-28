@@ -51,10 +51,18 @@ class DeploymentRepository
     public function listByCustomer(int $customerId, int $limit = 20): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, customer_id, type, version_from, version_to, status, log, triggered_by, started_at, finished_at, created_at
-             FROM deployments
-             WHERE customer_id = ?
-             ORDER BY created_at DESC
+            'SELECT d.id, d.customer_id, d.type, d.version_from, d.version_to, d.status, d.log,
+                    d.triggered_by, d.started_at, d.finished_at, d.created_at,
+                    (
+                        SELECT b.backup_path
+                        FROM deployment_backups b
+                        WHERE b.customer_id = d.customer_id
+                        ORDER BY b.created_at DESC
+                        LIMIT 1
+                    ) AS latest_backup_path
+             FROM deployments d
+             WHERE d.customer_id = ?
+             ORDER BY d.created_at DESC
              LIMIT ?'
         );
         $stmt->execute([$customerId, $limit]);

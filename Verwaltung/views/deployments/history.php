@@ -201,6 +201,7 @@ php Verwaltung/agent/server.php</code>
                                 $createdStr = $diff < 3600 ? ('vor ' . ceil($diff / 60) . ' Min') : date('d.m.Y H:i', $createdTime);
                             }
                         }
+                        $rollbackBackupPath = trim((string)($d['latest_backup_path'] ?? ''));
                         ?>
                         <tr>
                             <td>
@@ -220,6 +221,18 @@ php Verwaltung/agent/server.php</code>
                             <td class="text-muted"><?php echo $createdStr; ?></td>
                             <td><?php echo htmlspecialchars((string)($d['triggered_by'] ?? 'manual'), ENT_QUOTES); ?></td>
                         </tr>
+                        <?php if ($status === 'rolled_back'): ?>
+                            <tr>
+                                <td colspan="7">
+                                    <div class="hint-card hint-card--warning">
+                                        <strong>Automatischer Rollback nicht möglich – manueller Eingriff erforderlich.</strong>
+                                        <?php if ($rollbackBackupPath !== ''): ?>
+                                            <div>Backup-Pfad: <code><?php echo htmlspecialchars($rollbackBackupPath, ENT_QUOTES); ?></code></div>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
