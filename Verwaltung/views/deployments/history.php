@@ -221,31 +221,35 @@ php Verwaltung/agent/server.php</code>
         </div>
     </section>
 
-    <section class="surface">
+    <section class="surface" id="deploymentHistorySection" data-running="<?php echo $hasRunningDeployment ? '1' : '0'; ?>">
         <h2 class="section-title">Deployment-Historie</h2>
         <?php if ($hasRunningDeployment): ?>
-            <div class="hint-card hint-card--info">
-                Ein Deployment läuft gerade. Diese Seite aktualisiert sich automatisch jede Sekunde, bis der Status auf <code>success</code> oder <code>failed</code> kippt.
+            <div class="hint-card hint-card--info" id="deploymentHistoryAutoRefreshNotice">
+                <div>Ein Deployment läuft gerade. Die History kann automatisch alle 5 Sekunden aktualisiert werden, bis der Status auf <code>success</code> oder <code>failed</code> kippt.</div>
+                <div class="submit-row">
+                    <button class="btn btn--secondary btn--sm" type="button" id="deploymentHistoryAutoRefreshToggle">Auto-Refresh deaktivieren</button>
+                </div>
             </div>
         <?php endif; ?>
-        <?php if (empty($deployments)): ?>
-            <p class="empty-state">Noch keine Deployments vorhanden.</p>
-        <?php else: ?>
-            <div class="table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr id="deployment-<?php echo (int)($d['id'] ?? 0); ?>">
-                            <th>ID</th>
-                            <th>Typ</th>
-                            <th>Status</th>
-                            <th>Version</th>
-                            <th>Dauer</th>
-                            <th>Gestartet</th>
-                            <th>Ausgelöst durch</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($deployments as $d): ?>
+        <div id="deploymentHistoryContent">
+            <?php if (empty($deployments)): ?>
+                <p class="empty-state">Noch keine Deployments vorhanden.</p>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Typ</th>
+                                <th>Status</th>
+                                <th>Version</th>
+                                <th>Dauer</th>
+                                <th>Gestartet</th>
+                                <th>Ausgelöst durch</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($deployments as $d): ?>
                         <?php
                         $status = (string)($d['status'] ?? 'pending');
                         $statusClass = match ($status) {
@@ -277,25 +281,25 @@ php Verwaltung/agent/server.php</code>
                         }
                         $rollbackBackupPath = trim((string)($d['latest_backup_path'] ?? ''));
                         ?>
-                        <tr>
-                            <td>
-                                <?php if (!empty($d['log'])): ?>
-                                    <details class="table-log">
-                                        <summary>#<?php echo (int)($d['id'] ?? 0); ?></summary>
-                                        <pre class="code-block"><?php echo htmlspecialchars((string)($d['log'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></pre>
-                                    </details>
-                                <?php else: ?>
-                                    #<?php echo (int)($d['id'] ?? 0); ?>
-                                <?php endif; ?>
-                            </td>
-                            <td class="mono"><?php echo htmlspecialchars((string)($d['type'] ?? 'cms'), ENT_QUOTES); ?></td>
-                            <td><span class="status-pill status-pill--<?php echo $statusClass; ?>"><?php echo htmlspecialchars($status, ENT_QUOTES); ?></span></td>
-                            <td class="mono"><?php echo $version; ?></td>
-                            <td class="mono"><?php echo $duration; ?></td>
-                            <td class="text-muted"><?php echo $createdStr; ?></td>
-                            <td><?php echo htmlspecialchars((string)($d['triggered_by'] ?? 'manual'), ENT_QUOTES); ?></td>
-                        </tr>
-                        <?php if ($status === 'rolled_back'): ?>
+                            <tr id="deployment-<?php echo (int)($d['id'] ?? 0); ?>">
+                                <td>
+                                    <?php if (!empty($d['log'])): ?>
+                                        <details class="table-log">
+                                            <summary>#<?php echo (int)($d['id'] ?? 0); ?></summary>
+                                            <pre class="code-block"><?php echo htmlspecialchars((string)($d['log'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></pre>
+                                        </details>
+                                    <?php else: ?>
+                                        #<?php echo (int)($d['id'] ?? 0); ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="mono"><?php echo htmlspecialchars((string)($d['type'] ?? 'cms'), ENT_QUOTES); ?></td>
+                                <td><span class="status-pill status-pill--<?php echo $statusClass; ?>"><?php echo htmlspecialchars($status, ENT_QUOTES); ?></span></td>
+                                <td class="mono"><?php echo $version; ?></td>
+                                <td class="mono"><?php echo $duration; ?></td>
+                                <td class="text-muted"><?php echo $createdStr; ?></td>
+                                <td><?php echo htmlspecialchars((string)($d['triggered_by'] ?? 'manual'), ENT_QUOTES); ?></td>
+                            </tr>
+                            <?php if ($status === 'rolled_back'): ?>
                             <tr>
                                 <td colspan="7">
                                     <div class="hint-card hint-card--warning">
@@ -306,12 +310,13 @@ php Verwaltung/agent/server.php</code>
                                     </div>
                                 </td>
                             </tr>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        <?php endif; ?>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
     </section>
 </div>
 <?php
@@ -321,9 +326,87 @@ if ($hasRunningDeployment) {
     $extraScripts .= <<<HTML
 <script>
 (function () {
-    window.setTimeout(function () {
-        window.location.reload();
-    }, 1000);
+    var storageKey = 'deployment-history-auto-refresh';
+    var section = document.getElementById('deploymentHistorySection');
+    var content = document.getElementById('deploymentHistoryContent');
+    var notice = document.getElementById('deploymentHistoryAutoRefreshNotice');
+    var toggle = document.getElementById('deploymentHistoryAutoRefreshToggle');
+    var intervalId = null;
+
+    function autoRefreshEnabled() {
+        return window.localStorage.getItem(storageKey) !== 'off';
+    }
+
+    function updateToggleLabel() {
+        if (!toggle) {
+            return;
+        }
+        toggle.textContent = autoRefreshEnabled() ? 'Auto-Refresh deaktivieren' : 'Auto-Refresh aktivieren';
+    }
+
+    function stopPolling() {
+        if (intervalId !== null) {
+            window.clearInterval(intervalId);
+            intervalId = null;
+        }
+    }
+
+    function bindToggle() {
+        if (!toggle || toggle.dataset.bound === '1') {
+            return;
+        }
+        toggle.dataset.bound = '1';
+        toggle.addEventListener('click', function () {
+            if (autoRefreshEnabled()) {
+                window.localStorage.setItem(storageKey, 'off');
+                stopPolling();
+            } else {
+                window.localStorage.removeItem(storageKey);
+                startPolling();
+            }
+            updateToggleLabel();
+        });
+    }
+
+    function refreshHistory() {
+        fetch(window.location.href, { credentials: 'same-origin' })
+            .then(function (response) { return response.text(); })
+            .then(function (html) {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var nextSection = doc.getElementById('deploymentHistorySection');
+                var nextContent = doc.getElementById('deploymentHistoryContent');
+                if (!nextSection || !nextContent || !section || !content) {
+                    return;
+                }
+
+                content.innerHTML = nextContent.innerHTML;
+                section.setAttribute('data-running', nextSection.getAttribute('data-running') || '0');
+
+                var stillRunning = nextSection.getAttribute('data-running') === '1';
+                if (!stillRunning) {
+                    stopPolling();
+                    if (notice) {
+                        notice.innerHTML = '<div>Kein Deployment läuft mehr. Auto-Refresh wurde gestoppt.</div><div class="submit-row"><button class="btn btn--secondary btn--sm" type="button" id="deploymentHistoryAutoRefreshToggle">Auto-Refresh aktivieren</button></div>';
+                        toggle = document.getElementById('deploymentHistoryAutoRefreshToggle');
+                        bindToggle();
+                        updateToggleLabel();
+                    }
+                }
+            })
+            .catch(function () {});
+    }
+
+    function startPolling() {
+        if (!section || !content || intervalId !== null || !autoRefreshEnabled()) {
+            return;
+        }
+        intervalId = window.setInterval(refreshHistory, 5000);
+    }
+
+    updateToggleLabel();
+    bindToggle();
+    startPolling();
 })();
 </script>
 HTML;
