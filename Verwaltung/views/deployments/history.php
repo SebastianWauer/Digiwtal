@@ -96,64 +96,61 @@ ob_start();
             </div>
         <?php endif; ?>
 
-        <div class="hint-card hint-card--info">
-            <div><strong>Basis-Pfad:</strong> <code><?php echo htmlspecialchars($baseTarget, ENT_QUOTES); ?></code></div>
-            <div><strong>Transfer-Protokoll:</strong> <code><?php echo htmlspecialchars((string)($access['protocol'] ?? 'ftp'), ENT_QUOTES); ?></code></div>
-            <div><strong>CMS:</strong> lokaler Projektordner <code>/CMS</code> → <code><?php echo htmlspecialchars($cmsTarget, ENT_QUOTES); ?></code></div>
-            <div><strong>Frontend:</strong> lokaler Ordnerpicker → <code><?php echo htmlspecialchars($frontendTarget, ENT_QUOTES); ?></code></div>
+        <div class="deploy-overview-grid">
+            <article class="deploy-overview-card">
+                <div class="deploy-overview-card__label">Basis-Pfad</div>
+                <div class="deploy-overview-card__value"><code><?php echo htmlspecialchars($baseTarget, ENT_QUOTES); ?></code></div>
+            </article>
+            <article class="deploy-overview-card">
+                <div class="deploy-overview-card__label">Transfer</div>
+                <div class="deploy-overview-card__value"><code><?php echo htmlspecialchars((string)($access['protocol'] ?? 'ftp'), ENT_QUOTES); ?></code></div>
+            </article>
+            <article class="deploy-overview-card">
+                <div class="deploy-overview-card__label">CMS-Ziel</div>
+                <div class="deploy-overview-card__value"><code><?php echo htmlspecialchars($cmsTarget, ENT_QUOTES); ?></code></div>
+            </article>
+            <article class="deploy-overview-card">
+                <div class="deploy-overview-card__label">Frontend-Ziel</div>
+                <div class="deploy-overview-card__value"><code><?php echo htmlspecialchars($frontendTarget, ENT_QUOTES); ?></code></div>
+            </article>
         </div>
 
-        <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/test-connections" class="form-stack">
-            <?php echo Csrf::field(); ?>
-            <div class="submit-row">
-                <button class="btn btn--secondary" type="submit">Server- und DB-Verbindung testen</button>
-            </div>
-            <div class="field__hint">Prüft getrennt den konfigurierten Serverzugang und die Kundendatenbank, ohne Dateien zu deployen.</div>
-        </form>
-    </section>
-
-    <section class="surface">
-        <h2 class="section-title">Lokaler SFTP-Agent</h2>
-        <div class="hint-card hint-card--success">
-            <div>Für echtes One-Click-SFTP startet auf deinem Rechner ein lokaler HTTPS-Agent auf <code>https://127.0.0.1:8765</code>. Die Verwaltung liefert nur das Deploy-Payload.</div>
-            <code class="code-block">php Verwaltung/agent/generate_cert.php
+        <div class="deploy-meta-grid">
+            <article class="deploy-meta-card deploy-meta-card--success">
+                <div class="deploy-meta-card__head">
+                    <h2 class="section-title">Lokaler Agent</h2>
+                    <div class="agent-status" id="localAgentStatus">Status: nicht geprüft</div>
+                </div>
+                <p class="deploy-card__copy">Lokaler HTTPS-Agent auf <code>https://127.0.0.1:8765</code> für One-Click-SFTP.</p>
+                <code class="code-block">php Verwaltung/agent/generate_cert.php
 php Verwaltung/agent/server.php</code>
-            <div>Danach dieselbe Browser-Instanz einmal auf <a class="link-action link-action--success" href="https://127.0.0.1:8765/health" target="_blank" rel="noreferrer">https://127.0.0.1:8765/health</a> öffnen und dem lokalen Zertifikat vertrauen.</div>
-            <div class="agent-status" id="localAgentStatus">Status: nicht geprüft</div>
-        </div>
-    </section>
-
-    <section class="surface">
-        <div class="hint-card hint-card--warning">
-            <strong>Wichtiger Hinweis zum Serverpasswort:</strong> Für lokale Agent-Deployments wird das im Serverzugang hinterlegte Passwort kurz an deinen Browser und von dort an den lokalen Agenten übergeben, damit dein Rechner die SFTP-Verbindung aufbauen kann.
-        </div>
-    </section>
-
-    <?php if (!$hasSuccessfulDeployment): ?>
-        <section class="surface">
-            <div class="hint-card hint-card--warning">
-                <div><strong>Erstinstallation</strong></div>
-                <div>Dieser Kunde hat noch keinen erfolgreichen Deploy. Die Erstinstallation deployed das CMS und führt danach die Provisionierung direkt aus.</div>
-                <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/install" class="form-stack">
+                <div class="field__hint">Einmal im selben Browser <a class="link-action link-action--success" href="https://127.0.0.1:8765/health" target="_blank" rel="noreferrer">https://127.0.0.1:8765/health</a> öffnen und das lokale Zertifikat vertrauen.</div>
+            </article>
+            <article class="deploy-meta-card deploy-meta-card--warning">
+                <div class="deploy-meta-card__head">
+                    <h2 class="section-title">Sicherheit</h2>
+                </div>
+                <p class="deploy-card__copy">Für lokale Agent-Deployments wird das Serverpasswort kurz an deinen Browser und dann an den lokalen Agenten übergeben.</p>
+                <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/test-connections" class="form-stack">
                     <?php echo Csrf::field(); ?>
                     <div class="submit-row">
-                        <button class="btn btn--warning" type="submit" onclick="return confirm('Erstinstallation jetzt starten? Das deployed das CMS und führt die Provisionierung aus.');">Erstinstallation starten</button>
+                        <button class="btn btn--secondary btn--sm" type="submit">Server- und DB-Verbindung testen</button>
                     </div>
-                    <div class="field__hint">Verwendet den lokalen Projektordner <code>/CMS</code> und startet anschließend automatisch die CMS-Provisionierung.</div>
+                    <div class="field__hint">Vorab prüfen, ohne Dateien zu deployen.</div>
                 </form>
-            </div>
-        </section>
-    <?php endif; ?>
+            </article>
+        </div>
+    </section>
 
     <section class="surface">
         <header class="page-header page-header--section">
             <div class="page-header__main">
-                <h2 class="section-title">Update-Deploys</h2>
-                <p class="page-subtitle">Für bestehende Installationen. Es werden nur Dateien deployed, keine CMS-Provisionierung.</p>
+                <h2 class="section-title">Deploy-Aktionen</h2>
+                <p class="page-subtitle">Erstinstallation und Updates kompakt an einem Ort.</p>
             </div>
         </header>
         <?php if (!empty($cmsDeployRequirements) || !empty($frontendDeployRequirements) || !empty($combinedDeployRequirements)): ?>
-            <div class="hint-card hint-card--warning">
+            <div class="hint-card hint-card--warning deploy-warning-card">
                 <strong>Vor dem Deploy fehlen noch Pflichtfelder im Serverzugang.</strong>
                 <?php if (!empty($cmsDeployRequirements)): ?>
                     <div>CMS: <?php echo htmlspecialchars(implode(', ', $cmsDeployRequirements), ENT_QUOTES); ?></div>
@@ -168,11 +165,24 @@ php Verwaltung/agent/server.php</code>
             </div>
         <?php endif; ?>
         <div class="deploy-grid">
+            <?php if (!$hasSuccessfulDeployment): ?>
+                <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/install" class="deploy-card deploy-card--install">
+                    <?php echo Csrf::field(); ?>
+                    <div class="deploy-card__eyebrow">Erstinstallation</div>
+                    <h2 class="deploy-card__title">CMS deployen + provisionieren</h2>
+                    <p class="deploy-card__copy">Für neue Kunden. Nutzt <code>/CMS</code> und richtet das CMS direkt betriebsbereit ein.</p>
+                    <div class="submit-row">
+                        <button class="btn btn--warning" type="submit" onclick="return confirm('Erstinstallation jetzt starten? Das deployed das CMS und führt die Provisionierung aus.');">Erstinstallation starten</button>
+                    </div>
+                </form>
+            <?php endif; ?>
+
             <form method="POST" data-local-agent-form="1" data-validation-errors="<?php echo htmlspecialchars(json_encode($cmsDeployRequirements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]', ENT_QUOTES); ?>" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="cms">
+                <div class="deploy-card__eyebrow">Update</div>
                 <h2 class="deploy-card__title">CMS deployen</h2>
-                <p class="deploy-card__copy">Nutzt den lokalen Projektordner <code>/CMS</code> auf deinem Rechner und lädt per SFTP hoch.</p>
+                <p class="deploy-card__copy"><code>/CMS</code> von deinem Rechner per SFTP hochladen.</p>
                 <?php if (!empty($cmsDeployRequirements)): ?>
                     <div class="field__hint">Blockiert bis konfiguriert: <?php echo htmlspecialchars(implode(', ', $cmsDeployRequirements), ENT_QUOTES); ?></div>
                 <?php endif; ?>
@@ -184,8 +194,9 @@ php Verwaltung/agent/server.php</code>
             <form method="POST" data-local-agent-form="1" data-validation-errors="<?php echo htmlspecialchars(json_encode($frontendDeployRequirements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]', ENT_QUOTES); ?>" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="frontend">
+                <div class="deploy-card__eyebrow">Update</div>
                 <h2 class="deploy-card__title">Frontend deployen</h2>
-                <p class="deploy-card__copy">Wähle den lokalen Frontend-Ordner. Er wird im Browser komprimiert und vom lokalen Agenten per SFTP übertragen.</p>
+                <p class="deploy-card__copy">Lokalen Frontend-Ordner wählen, komprimieren und per Agent übertragen.</p>
                 <?php if (!empty($frontendDeployRequirements)): ?>
                     <div class="field__hint">Blockiert bis konfiguriert: <?php echo htmlspecialchars(implode(', ', $frontendDeployRequirements), ENT_QUOTES); ?></div>
                 <?php endif; ?>
@@ -198,8 +209,9 @@ php Verwaltung/agent/server.php</code>
             <form method="POST" data-local-agent-form="1" data-validation-errors="<?php echo htmlspecialchars(json_encode($combinedDeployRequirements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]', ENT_QUOTES); ?>" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/agent-payload" class="deploy-card">
                 <?php echo Csrf::field(); ?>
                 <input type="hidden" name="type" value="combined">
+                <div class="deploy-card__eyebrow">Update</div>
                 <h2 class="deploy-card__title">CMS + Frontend deployen</h2>
-                <p class="deploy-card__copy">CMS kommt aus deinem lokalen Projektordner <code>/CMS</code>, Frontend aus dem gewählten Ordner.</p>
+                <p class="deploy-card__copy">CMS aus <code>/CMS</code> plus gewähltes Frontend in einem Schritt.</p>
                 <?php if (!empty($combinedDeployRequirements)): ?>
                     <div class="field__hint">Blockiert bis konfiguriert: <?php echo htmlspecialchars(implode(', ', $combinedDeployRequirements), ENT_QUOTES); ?></div>
                 <?php endif; ?>
@@ -212,12 +224,12 @@ php Verwaltung/agent/server.php</code>
     </section>
 
     <section class="surface">
-        <div class="submit-row">
+        <div class="submit-row deploy-tools-row">
             <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/rollback" class="table-inline-form" onsubmit="return confirm('Wirklich auf den letzten Stand zurückrollen?');">
                 <?php echo Csrf::field(); ?>
                 <button class="btn btn--secondary" type="submit">Rollback</button>
             </form>
-            <span class="field__hint">Stellt den letzten bekannten Stand wieder her.</span>
+            <span class="field__hint">Nur für den letzten bekannten Stand. Hängende Deployments lassen sich direkt in der History stoppen.</span>
         </div>
     </section>
 
