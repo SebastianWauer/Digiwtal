@@ -127,7 +127,7 @@
             return;
         }
         el.textContent = 'Status: ' + message;
-        el.style.color = isError ? '#b91c1c' : '#0f172a';
+        el.style.color = isError ? '#ffb3b3' : '#9fe9be';
     }
 
     function getValidationErrors(form) {
