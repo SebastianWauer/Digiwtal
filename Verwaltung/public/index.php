@@ -198,6 +198,7 @@ $router->add('GET',  '/admin/customers/{id}/deployments', [$deployController, 'h
 $router->add('POST', '/admin/customers/{id}/deployments/install', [$deployController, 'install']);
 $router->add('POST', '/admin/customers/{id}/deployments/test-connections', [$deployController, 'testConnections']);
 $router->add('POST', '/admin/customers/{id}/deployments/agent-payload', [$deployController, 'agentPayload']);
+$router->add('POST', '/admin/customers/{id}/deployments/{deploymentId}/stop', [$deployController, 'stop']);
 $router->add('POST', '/admin/customers/{id}/deployments/rollback', [$deployController, 'rollback']);
 $router->add('POST', '/admin/push/subscribe',   [$pushController, 'subscribe']);
 $router->add('POST', '/admin/push/unsubscribe', [$pushController, 'unsubscribe']);

@@ -48,6 +48,18 @@ class DeploymentRepository
         $stmt->execute([$status, $id]);
     }
 
+    public function markStoppedAsFailed(int $id, string $reason): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE deployments
+             SET finished_at = NOW(),
+                 status = ?,
+                 log = CONCAT(COALESCE(log, ""), ?)
+             WHERE id = ?'
+        );
+        $stmt->execute(['failed', "\n" . $reason . "\n", $id]);
+    }
+
     public function listByCustomer(int $customerId, int $limit = 20): array
     {
         $limit = max(1, min($limit, 200));

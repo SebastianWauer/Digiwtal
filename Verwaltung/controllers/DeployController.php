@@ -123,6 +123,40 @@ class DeployController
         exit;
     }
 
+    public function stop(int $customerId, int $deploymentId): void
+    {
+        AdminAuth::requireAuth();
+
+        if (!Csrf::verify($_POST['csrf_token'] ?? '')) {
+            $_SESSION['flash_errors'] = ['CSRF token invalid'];
+            header('Location: /admin/customers/' . $customerId . '/deployments');
+            exit;
+        }
+
+        $deployment = $this->deploymentRepo->findById($deploymentId);
+        if ($deployment === null || (int)($deployment['customer_id'] ?? 0) !== $customerId) {
+            $_SESSION['flash_errors'] = ['Deployment nicht gefunden.'];
+            header('Location: /admin/customers/' . $customerId . '/deployments');
+            exit;
+        }
+
+        if ((string)($deployment['status'] ?? '') !== 'running') {
+            $_SESSION['flash_errors'] = ['Nur laufende Deployments können manuell gestoppt werden.'];
+            header('Location: /admin/customers/' . $customerId . '/deployments');
+            exit;
+        }
+
+        $this->deploymentRepo->markStoppedAsFailed(
+            $deploymentId,
+            '[MANUAL] Deployment manuell auf failed gesetzt, weil der Prozess hängen blieb.'
+        );
+        $this->audit->log('deploy.stop', 'deployment', $deploymentId, 'customer: ' . $customerId);
+
+        $_SESSION['flash_success'] = 'Deployment #' . $deploymentId . ' wurde manuell als fehlgeschlagen markiert.';
+        header('Location: /admin/customers/' . $customerId . '/deployments');
+        exit;
+    }
+
     public function testConnections(int $customerId): void
     {
         AdminAuth::requireAuth();
