@@ -311,6 +311,12 @@ php Verwaltung/agent/server.php</code>
                                 <td class="text-muted"><?php echo $createdStr; ?></td>
                                 <td>
                                     <div><?php echo htmlspecialchars((string)($d['triggered_by'] ?? 'manual'), ENT_QUOTES); ?></div>
+                                    <?php if ($rollbackBackupPath !== ''): ?>
+                                        <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/<?php echo (int)($d['id'] ?? 0); ?>/rollback" class="table-inline-form" onsubmit="return confirm('Rollback auf den Stand dieses Deployments starten?');">
+                                            <?php echo Csrf::field(); ?>
+                                            <button class="btn btn--linkish link-action link-action--warning" type="submit">Rollback auf diesen Stand</button>
+                                        </form>
+                                    <?php endif; ?>
                                     <?php if ($status === 'running'): ?>
                                         <form method="POST" action="/admin/customers/<?php echo (int)($customer['id'] ?? 0); ?>/deployments/<?php echo (int)($d['id'] ?? 0); ?>/stop" class="table-inline-form" onsubmit="return confirm('Hängendes Deployment wirklich manuell auf failed setzen?');">
                                             <?php echo Csrf::field(); ?>

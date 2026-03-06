@@ -40,6 +40,9 @@ final class MediaController
         $q          = trim((string)($_GET['q'] ?? ''));
         $ext        = trim((string)($_GET['ext'] ?? ''));
         $onlyUnused = (string)($_GET['unused'] ?? '') === '1';
+        $page       = max(1, (int)($_GET['page'] ?? 1));
+        $perPage    = (int)($_GET['per_page'] ?? 40);
+        $perPage    = max(1, min(200, $perPage));
 
         // ✅ GET > Pref > Default
         $view = (string)($_GET['view'] ?? '');
@@ -55,7 +58,13 @@ final class MediaController
 
         if ($folderId <= 0) $folderId = 0;
 
-        $rows = $mediaRepo->listActive($folderId, $q, $ext, $onlyUnused, 200, 0);
+        $total = $mediaRepo->countActive($folderId, $q, $ext, $onlyUnused);
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+        $offset = ($page - 1) * $perPage;
+        $rows = $mediaRepo->listActive($folderId, $q, $ext, $onlyUnused, $perPage, $offset);
 
         $folders = $folderRepo->listAll();
         $flash = $_SESSION['flash'] ?? null;

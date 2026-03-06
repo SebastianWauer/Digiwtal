@@ -21,7 +21,7 @@ if (!function_exists('cms_api_debug_log')) {
 
         $line = '[' . gmdate('c') . '] ' . $message . "\n";
         @file_put_contents(cms_api_log_path(), $line, FILE_APPEND);
-        error_log($message);
+        FileLogger::channel('cms-api')->error($message);
     }
 }
 
@@ -78,7 +78,7 @@ if (!function_exists('request_path')) {
  *  - GET /api/v1/media/{id}
  *
  * Internal / secured:
- *  - GET  /api/health?token=
+ *  - GET  /api/health (X-Health-Token header, query token deprecated fallback)
  *  - POST /api/internal/create-backup   (X-Deploy-Token)
  *  - POST /api/internal/run-migrations  (X-Deploy-Token)
  */
@@ -167,6 +167,96 @@ function json_response($data, int $status = 200): void
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
+
+function api_client_ip(): string
+{
+    $xff = (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '');
+    if ($xff !== '') {
+        $first = trim(explode(',', $xff)[0] ?? '');
+        if ($first !== '') {
+            return $first;
+        }
+    }
+
+    $realIp = trim((string)($_SERVER['HTTP_X_REAL_IP'] ?? ''));
+    if ($realIp !== '') {
+        return $realIp;
+    }
+
+    return (string)($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+}
+
+/**
+ * Simple fixed-window limiter: 60 req/min per IP.
+ * Uses APCu if available, otherwise DB table `rate_limits`.
+ */
+function enforce_api_rate_limit(int $maxRequests = 60, int $windowSeconds = 60): void
+{
+    $ip = api_client_ip();
+    $now = time();
+    $windowStart = (int)(floor($now / $windowSeconds) * $windowSeconds);
+    $retryAfter = max(1, $windowSeconds - ($now - $windowStart));
+    $count = 0;
+
+    $apcuEnabled = function_exists('apcu_enabled') && apcu_enabled();
+    if ($apcuEnabled) {
+        $key = 'cms_api_rl:' . sha1($ip . ':' . (string)$windowStart);
+        $ok = false;
+        $count = (int)apcu_inc($key, 1, $ok, $windowSeconds + 5);
+        if (!$ok) {
+            apcu_store($key, 1, $windowSeconds + 5);
+            $count = 1;
+        }
+    } else {
+        try {
+            $pdo = db();
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS rate_limits (
+                    ip_hash      CHAR(64)      NOT NULL,
+                    window_start INT UNSIGNED  NOT NULL,
+                    requests     INT UNSIGNED  NOT NULL DEFAULT 0,
+                    updated_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (ip_hash, window_start)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+
+            $ipHash = hash('sha256', $ip);
+            $stmt = $pdo->prepare("
+                INSERT INTO rate_limits (ip_hash, window_start, requests, updated_at)
+                VALUES (:ip_hash, :window_start, 1, NOW())
+                ON DUPLICATE KEY UPDATE requests = requests + 1, updated_at = NOW()
+            ");
+            $stmt->execute([
+                ':ip_hash' => $ipHash,
+                ':window_start' => $windowStart,
+            ]);
+
+            $sel = $pdo->prepare("
+                SELECT requests
+                FROM rate_limits
+                WHERE ip_hash = :ip_hash
+                  AND window_start = :window_start
+                LIMIT 1
+            ");
+            $sel->execute([
+                ':ip_hash' => $ipHash,
+                ':window_start' => $windowStart,
+            ]);
+            $count = (int)($sel->fetchColumn() ?: 0);
+        } catch (Throwable $e) {
+            cms_api_debug_log('[CMS_API] rate_limit_fallback_error ip=' . $ip . ' msg=' . $e->getMessage());
+            return; // fail-open
+        }
+    }
+
+    if ($count > $maxRequests) {
+        header('Retry-After: ' . (string)$retryAfter);
+        json_response(['ok' => false, 'error' => 'rate_limited'], 429);
+    }
+}
+
+// Per-request API rate limit (global, before routing)
+enforce_api_rate_limit(60, 60);
 
 // --------------------------------------------------
 // Manifest Helpers (cms-manifest.json, außerhalb public/)
@@ -291,11 +381,43 @@ function zip_add_dir(ZipArchive $zip, string $dir, string $zipBase): void
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 // --------------------------------------------------
-// Health-Check: GET /api/health?token=xxx
+// Health-Check: GET /api/health (header token; query fallback deprecated)
 // --------------------------------------------------
+if ($method === 'POST' && $path === '/api/setup/init') {
+    $expectedToken = trim((string)\App\Core\Env::get('SETUP_TOKEN', ''));
+    $givenToken = trim((string)($_SERVER['HTTP_X_SETUP_TOKEN'] ?? ''));
+
+    if ($expectedToken === '') {
+        json_response(['ok' => false, 'error' => 'setup_token_not_configured'], 503);
+    }
+    if ($givenToken === '' || !hash_equals($expectedToken, $givenToken)) {
+        json_response(['ok' => false, 'error' => 'forbidden'], 403);
+    }
+
+    try {
+        if (!\App\Core\Setup::allowSetupRequest(db())) {
+            json_response(['ok' => false, 'error' => 'setup_not_allowed'], 409);
+        }
+    } catch (Throwable $e) {
+        json_response(['ok' => false, 'error' => 'db_not_available'], 503);
+    }
+
+    json_response([
+        'ok' => true,
+        'setup_allowed' => true,
+        'csrf_token' => admin_csrf_token(),
+    ]);
+}
+
 if ($method === 'GET' && $path === '/api/health') {
     $expectedToken = \App\Core\Env::get('HEALTH_TOKEN', '');
-    $givenToken    = (string)($_GET['token'] ?? '');
+    $headerToken   = trim((string)($_SERVER['HTTP_X_HEALTH_TOKEN'] ?? ''));
+    $queryToken    = trim((string)($_GET['token'] ?? ''));
+    $givenToken    = $headerToken !== '' ? $headerToken : $queryToken;
+
+    if ($headerToken === '' && $queryToken !== '') {
+        cms_api_debug_log('[CMS_API] deprecated health token via query parameter used');
+    }
 
     if ($expectedToken === '' || !hash_equals($expectedToken, $givenToken)) {
         json_response(['error' => 'Forbidden'], 403);
@@ -524,21 +646,6 @@ if (!str_starts_with($path, '/api/v1/')) {
 }
 
 $sub = substr($path, strlen('/api/v1'));
-
-// --------------------------------------------------
-// Rate Limit: 60 req/min pro IP (APCu, fail-open)
-// Bucket: 1 Minute. Kein DB-Schema nötig.
-// --------------------------------------------------
-if (function_exists('apcu_add') && function_exists('apcu_inc')) {
-    $rlIp  = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    $rlKey = 'api_rl_' . md5($rlIp) . '_' . (int)(time() / 60);
-    apcu_add($rlKey, 0, 90); // TTL 90s, damit abgelaufene Buckets sich selbst löschen
-    $rlCount = apcu_inc($rlKey);
-    if ($rlCount !== false && $rlCount > 60) {
-        header('Retry-After: ' . (60 - (time() % 60)));
-        json_response(['error' => 'Too Many Requests'], 429);
-    }
-}
 
 try {
     $pdo = db();

@@ -303,13 +303,19 @@ final class PageRepositoryDb implements PageRepositoryInterface
 
     public function softDelete(int $id): void
     {
+        $randomSuffix = '_deleted_' . bin2hex(random_bytes(4));
         $stmt = $this->pdo->prepare("
             UPDATE pages
-            SET is_deleted = 1, deleted_at = NOW()
+            SET is_deleted = 1,
+                slug = CONCAT(slug, :suffix),
+                deleted_at = NOW()
             WHERE id = :id
             LIMIT 1
         ");
-        $stmt->execute([':id' => $id]);
+        $stmt->execute([
+            ':id' => $id,
+            ':suffix' => $randomSuffix,
+        ]);
     }
 
     public function restore(int $id): void
@@ -334,6 +340,75 @@ final class PageRepositoryDb implements PageRepositoryInterface
         }
         return ((int)$stmt->fetchColumn()) > 0;
     }
+
+    public function createRevision(int $pageId, string $title, string $contentJson, ?int $createdBy = null): void
+    {
+        $st = $this->pdo->prepare("
+            INSERT INTO page_revisions (page_id, content_json, title, created_by, created_at)
+            VALUES (:page_id, :content_json, :title, :created_by, NOW())
+        ");
+        $st->execute([
+            ':page_id' => $pageId,
+            ':content_json' => $contentJson,
+            ':title' => $title,
+            ':created_by' => $createdBy,
+        ]);
+    }
+
+    public function listRevisions(int $pageId, int $limit = 20): array
+    {
+        $limit = max(1, min(100, $limit));
+        $st = $this->pdo->prepare("
+            SELECT id, page_id, title, content_json, created_by, created_at
+            FROM page_revisions
+            WHERE page_id = :page_id
+            ORDER BY created_at DESC, id DESC
+            LIMIT {$limit}
+        ");
+        $st->execute([':page_id' => $pageId]);
+        $rows = $st->fetchAll();
+        return is_array($rows) ? $rows : [];
+    }
+
+    public function findRevision(int $pageId, int $revisionId): ?array
+    {
+        $st = $this->pdo->prepare("
+            SELECT id, page_id, title, content_json, created_by, created_at
+            FROM page_revisions
+            WHERE page_id = :page_id
+              AND id = :revision_id
+            LIMIT 1
+        ");
+        $st->execute([
+            ':page_id' => $pageId,
+            ':revision_id' => $revisionId,
+        ]);
+        $row = $st->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    public function pruneRevisions(int $pageId, int $keep = 50): void
+    {
+        $keep = max(1, min(500, $keep));
+        $st = $this->pdo->prepare("
+            DELETE FROM page_revisions
+            WHERE page_id = :page_id
+              AND id NOT IN (
+                SELECT id FROM (
+                  SELECT id
+                  FROM page_revisions
+                  WHERE page_id = :page_id_inner
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT {$keep}
+                ) latest
+              )
+        ");
+        $st->execute([
+            ':page_id' => $pageId,
+            ':page_id_inner' => $pageId,
+        ]);
+    }
+
     public function purgeDeleted(): int
     {
         $st = $this->pdo->prepare("DELETE FROM pages WHERE is_deleted = 1");

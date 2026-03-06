@@ -128,10 +128,20 @@ final class PagesController
         }
 
         $flash = null;
+        $revisions = [];
+        $selectedRevision = null;
 
         // SEO-Override (nur seitenspezifische Werte) für das Formular laden
         $seoSvc      = new SeoService(new SeoRepositoryDb($_pdo), new SiteSettingsRepositoryDb($_pdo));
         $seoOverride = $id > 0 ? ($seoSvc->getForPage($id, $page)['_override'] ?? []) : [];
+
+        if ($id > 0) {
+            $revisions = $repo->listRevisions($id, 20);
+            $previewRevisionId = (int)($_GET['revision'] ?? 0);
+            if ($previewRevisionId > 0) {
+                $selectedRevision = $repo->findRevision($id, $previewRevisionId);
+            }
+        }
 
         \admin_layout_begin([
             'title'    => 'Seite bearbeiten',
@@ -195,6 +205,15 @@ final class PagesController
         $status        = $postedStatus;
 
         $content = (string)($_POST['content_json'] ?? '{"blocks":[]}');
+        $restoreRevisionId = (int)($_POST['restore_revision_id'] ?? 0);
+
+        if ($id > 0 && $restoreRevisionId > 0) {
+            $rev = $repo->findRevision($id, $restoreRevisionId);
+            if (is_array($rev)) {
+                $title = (string)($rev['title'] ?? $title);
+                $content = (string)($rev['content_json'] ?? $content);
+            }
+        }
 
         $isHome     = !empty($_POST['is_home']);
         $navVisible = !empty($_POST['nav_visible']);
@@ -214,7 +233,8 @@ final class PagesController
             $navVisible,
             $navLabel,
             $navArea,
-            $navOrder
+            $navOrder,
+            (int)($user['id'] ?? 0)
         );
 
         $id2   = (int)($res['id'] ?? 0);
@@ -244,6 +264,8 @@ final class PagesController
         }
 
         $page = $id2 > 0 ? $repo->findById($id2) : null;
+        $revisions = $id2 > 0 ? $repo->listRevisions($id2, 20) : [];
+        $selectedRevision = null;
         if (!is_array($page)) {
             $page = [
                 'id'             => 0,

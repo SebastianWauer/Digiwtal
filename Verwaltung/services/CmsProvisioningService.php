@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 class CmsProvisioningService
 {
-    public function buildEnvContent(array $access, string $dbPassword): string
+    public function buildEnvContent(array $access, string $dbPassword, ?string $setupToken = null): string
     {
         $lines = [
             $this->envLine('APP_ENV', 'production'),
@@ -13,6 +13,9 @@ class CmsProvisioningService
             $this->envLine('DB_USER', (string)($access['db_user'] ?? '')),
             $this->envLine('DB_PASS', $dbPassword),
         ];
+        if ($setupToken !== null && trim($setupToken) !== '') {
+            $lines[] = $this->envLine('SETUP_TOKEN', $setupToken);
+        }
 
         return implode("\n", $lines) . "\n";
     }
@@ -22,6 +25,10 @@ class CmsProvisioningService
         $customerId = (int)($customer['id'] ?? 0);
         $dbPassword = $this->decryptRequired($customerId, $encrypted, 'db_password', 'DB-Passwort fehlt.');
         $adminPassword = $this->decryptRequired($customerId, $encrypted, 'cms_admin_password', 'CMS-Admin-Passwort fehlt.');
+        $setupToken = $this->resolveSetupToken($customerId, $access, $encrypted);
+        if ($setupToken !== null) {
+            $access['setup_token'] = $setupToken;
+        }
 
         $this->validateProvisioningInput($customer, $access);
 
@@ -77,37 +84,48 @@ class CmsProvisioningService
         try {
             $logger('[PROVISION] Remote-Setup via ' . $baseUrl . '/setup');
 
-            $step1 = $this->httpRequest('GET', $baseUrl . '/setup', [], $cookieFile);
-            if ($step1['status'] === 404) {
-                $logger('[PROVISION] Setup bereits abgeschlossen oder Endpoint nicht verfügbar. Behandle als bereits installiert.');
+            $setupToken = trim((string)($access['setup_token'] ?? ''));
+            if ($setupToken === '') {
+                $logger('[PROVISION] Kein Setup-Token vorhanden (SETUP_TOKEN).');
+                return false;
+            }
+
+            $init = $this->httpRequest(
+                'POST',
+                $baseUrl . '/api/setup/init',
+                [],
+                $cookieFile,
+                ['X-Setup-Token: ' . $setupToken, 'Accept: application/json']
+            );
+            if ($init['status'] === 404) {
+                $logger('[PROVISION] API /api/setup/init nicht verfügbar.');
+                return false;
+            }
+            if ($init['status'] === 409) {
+                $logger('[PROVISION] Setup bereits abgeschlossen. Behandle als bereits installiert.');
                 return true;
             }
+            if ($init['status'] >= 400) {
+                $logger('[PROVISION] POST /api/setup/init fehlgeschlagen mit HTTP ' . $init['status']);
+                return false;
+            }
+
+            $initData = json_decode($init['body'], true);
+            $token = is_array($initData) ? trim((string)($initData['csrf_token'] ?? '')) : '';
+            if ($token === '') {
+                $logger('[PROVISION] /api/setup/init lieferte keinen CSRF-Token.');
+                return false;
+            }
+
+            $step1 = $this->httpRequest('POST', $baseUrl . '/setup/step1', ['_token' => $token], $cookieFile);
             if ($step1['status'] >= 400) {
-                $logger('[PROVISION] GET /setup fehlgeschlagen mit HTTP ' . $step1['status']);
+                $logger('[PROVISION] POST /setup/step1 fehlgeschlagen mit HTTP ' . $step1['status']);
                 return false;
             }
 
-            $token = $this->extractCsrfToken($step1['body']);
-            if ($token === null) {
-                $logger('[PROVISION] Kein CSRF-Token auf Setup-Schritt 1 gefunden.');
-                return false;
-            }
-
-            $this->httpRequest('POST', $baseUrl . '/setup/step1', ['_token' => $token], $cookieFile);
-
-            $step2 = $this->httpRequest('GET', $baseUrl . '/setup/step2', [], $cookieFile);
-            $token = $this->extractCsrfToken($step2['body']);
-            if ($token === null) {
-                $logger('[PROVISION] Kein CSRF-Token auf Setup-Schritt 2 gefunden.');
-                return false;
-            }
-
-            $this->httpRequest('POST', $baseUrl . '/setup/step2', ['_token' => $token], $cookieFile);
-
-            $step3 = $this->httpRequest('GET', $baseUrl . '/setup/step3', [], $cookieFile);
-            $token = $this->extractCsrfToken($step3['body']);
-            if ($token === null) {
-                $logger('[PROVISION] Kein CSRF-Token auf Setup-Schritt 3 gefunden.');
+            $step2 = $this->httpRequest('POST', $baseUrl . '/setup/step2', ['_token' => $token], $cookieFile);
+            if ($step2['status'] >= 400) {
+                $logger('[PROVISION] POST /setup/step2 fehlgeschlagen mit HTTP ' . $step2['status']);
                 return false;
             }
 
@@ -280,9 +298,12 @@ class CmsProvisioningService
         return rtrim($domain, '/');
     }
 
-    private function httpRequest(string $method, string $url, array $fields, string $cookieFile): array
+    private function httpRequest(string $method, string $url, array $fields, string $cookieFile, array $headers = []): array
     {
         $ch = curl_init();
+        $requestHeaders = array_merge([
+            'User-Agent: DIGIWTAL-Provisioner/1.0',
+        ], $headers);
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
@@ -291,7 +312,7 @@ class CmsProvisioningService
             CURLOPT_TIMEOUT => 30,
             CURLOPT_COOKIEJAR => $cookieFile,
             CURLOPT_COOKIEFILE => $cookieFile,
-            CURLOPT_USERAGENT => 'DIGIWTAL-Provisioner/1.0',
+            CURLOPT_HTTPHEADER => $requestHeaders,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
         ]);
@@ -314,13 +335,29 @@ class CmsProvisioningService
         return ['status' => $status, 'body' => $body];
     }
 
-    private function extractCsrfToken(string $html): ?string
+    private function resolveSetupToken(int $customerId, array $access, array $encrypted): ?string
     {
-        if (preg_match('/name="_token"\s+value="([^"]+)"/', $html, $matches) === 1) {
-            return html_entity_decode($matches[1], ENT_QUOTES);
+        $fromAccess = trim((string)($access['setup_token'] ?? ''));
+        if ($fromAccess !== '') {
+            return $fromAccess;
         }
 
-        return null;
+        $deployEnc = (string)($encrypted['deploy_token_enc'] ?? '');
+        $deployNonce = (string)($encrypted['deploy_token_nonce'] ?? '');
+        $deployTag = (string)($encrypted['deploy_token_tag'] ?? '');
+        if ($deployEnc !== '' && $deployNonce !== '' && $deployTag !== '') {
+            try {
+                $decrypted = VaultCrypto::decrypt($deployEnc, $deployNonce, $deployTag, 'cust:' . $customerId);
+                if (trim($decrypted) !== '') {
+                    return trim($decrypted);
+                }
+            } catch (Throwable) {
+                // ignore, try env fallback
+            }
+        }
+
+        $fromEnv = trim((string)(getenv('CMS_SETUP_TOKEN') ?: ''));
+        return $fromEnv !== '' ? $fromEnv : null;
     }
 
     private function envLine(string $key, string $value): string

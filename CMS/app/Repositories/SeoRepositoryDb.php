@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
-final class SeoRepositoryDb
+final class SeoRepositoryDb implements SeoRepositoryInterface
 {
     public function __construct(private \PDO $pdo) {}
 

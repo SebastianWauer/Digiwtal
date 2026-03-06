@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class UserPrefRepositoryDb
+final class UserPrefRepositoryDb implements UserPrefRepositoryInterface
 {
     private PDO $pdo;
 

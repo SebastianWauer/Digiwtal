@@ -32,6 +32,21 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/app/CmsApiClient.php';
 require_once __DIR__ . '/app/view.php';
+$sharedLogger = dirname(__DIR__) . '/shared/FileLogger.php';
+$localLogger  = __DIR__ . '/app/FileLogger.php';
+if (is_file($sharedLogger)) {
+    require_once $sharedLogger;
+} elseif (is_file($localLogger)) {
+    require_once $localLogger;
+} else {
+    // Minimal no-op fallback so the site doesn't crash without a logger
+    if (!class_exists('FileLogger')) {
+        class FileLogger {
+            public static function channel(string $n): static { return new static(); }
+            public function error(string $m, array $c = []): void {}
+        }
+    }
+}
 
 // -------------------------------------------------------
 // Config from .env
@@ -39,7 +54,9 @@ require_once __DIR__ . '/app/view.php';
 $baseUrl  = (string)(getenv('CMS_API_URL')   ?: '');
 $token    = (string)(getenv('CMS_API_TOKEN') ?: '');
 $timeout  = (int)(getenv('CMS_TIMEOUT')      ?: 5);
-$cacheTtl = (int)(getenv('CMS_CACHE_TTL')    ?: 0);
+$cacheTtl = 0; // Live-Frontend: Seiteninhalte immer direkt aus dem CMS holen.
+$frontendBaseUrl = (string)(getenv('FRONTEND_BASE_URL') ?: '');
+$cmsSitemapUrl   = (string)(getenv('CMS_SITEMAP_URL') ?: '');
 
 if ($baseUrl === '') {
     header('Content-Type: text/plain; charset=utf-8', true, 500);
@@ -72,68 +89,61 @@ function frontendDebugLog(string $message): void
 
     $line = '[' . gmdate('c') . '] ' . $message . "\n";
     @file_put_contents(frontendLogPath(), $line, FILE_APPEND);
-    error_log($message);
+    FileLogger::channel('frontend')->error($message);
+}
+
+function renderErrorPage(int $statusCode, string $siteName, string $title, string $message, ?string $hint = null): never
+{
+    http_response_code($statusCode);
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
+
+    $pageTitle = $title;
+    $fullTitle = $title . ' – ' . $siteName;
+    $slug = 'error';
+    $navItems = [];
+    $blocks = [
+        [
+            'type' => 'hero',
+            'headline' => $title,
+            'subtitle' => $message,
+        ],
+    ];
+    if ($hint !== null && trim($hint) !== '') {
+        $blocks[] = [
+            'type' => 'text',
+            'text' => $hint,
+        ];
+    }
+
+    render('templates/layout.php', [
+        'siteName' => $siteName,
+        'title' => $fullTitle,
+        'pageTitle' => $pageTitle,
+        'blocks' => $blocks,
+        'navItems' => $navItems,
+        'slug' => $slug,
+    ]);
+    exit;
 }
 
 function render404(string $siteName = 'Website'): never {
-    http_response_code(404);
-    header('Content-Type: text/html; charset=utf-8');
-    header('Cache-Control: no-store, no-cache, must-revalidate');
-    header('Pragma: no-cache');
-    ?><!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 – <?php echo e($siteName); ?></title>
-</head>
-<body>
-    <header>
-        <h1><a href="/"><?php echo e($siteName); ?></a></h1>
-    </header>
-    <main>
-        <h1>404 – Seite nicht gefunden</h1>
-        <p>Die angeforderte Seite existiert nicht.</p>
-    </main>
-    <footer>
-        <p>&copy; <?php echo gmdate('Y'); ?> <?php echo e($siteName); ?></p>
-    </footer>
-</body>
-</html><?php
-    exit;
+    renderErrorPage(
+        404,
+        $siteName,
+        '404 – Seite nicht gefunden',
+        'Die angeforderte Seite existiert nicht oder wurde verschoben.'
+    );
 }
 
-function render502(string $siteName = 'Website'): never {
-    http_response_code(502);
-    header('Content-Type: text/html; charset=utf-8');
-    header('Cache-Control: no-store, no-cache, must-revalidate');
-    header('Pragma: no-cache');
-    $logPath = frontendLogPath();
-    $logHint = is_file($logPath) ? basename(dirname($logPath)) . '/' . basename($logPath) : '';
-    ?><!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>502 – <?php echo e($siteName); ?></title>
-</head>
-<body>
-    <header>
-        <h1><a href="/"><?php echo e($siteName); ?></a></h1>
-    </header>
-    <main>
-        <h1>502 – Bad Gateway</h1>
-        <p>Der Server ist momentan nicht erreichbar. Bitte versuchen Sie es später erneut.</p>
-        <?php if ($logHint !== ''): ?>
-            <p style="color:#64748b;font-size:14px;margin-top:12px;">Debug-Log: <?php echo e($logHint); ?></p>
-        <?php endif; ?>
-    </main>
-    <footer>
-        <p>&copy; <?php echo gmdate('Y'); ?> <?php echo e($siteName); ?></p>
-    </footer>
-</body>
-</html><?php
-    exit;
+function render500(string $siteName = 'Website'): never {
+    renderErrorPage(
+        500,
+        $siteName,
+        '500 – Interner Serverfehler',
+        'Der Server ist momentan nicht erreichbar. Bitte versuche es später erneut.'
+    );
 }
 
 // -------------------------------------------------------
@@ -143,6 +153,46 @@ $homeSlug = 'home';
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $uri  = is_string($path) ? $path : '/';
+
+if ($uri === '/sitemap.xml') {
+    try {
+        $xml = $client->getSitemapXml($cmsSitemapUrl !== '' ? $cmsSitemapUrl : null);
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        echo $xml;
+        exit;
+    } catch (CmsApiException $e) {
+        frontendDebugLog('[FRONTEND] sitemap fetch failed'
+            . ' status=' . $e->statusCode
+            . ' api_error=' . $e->apiError
+            . ' body=' . substr($e->rawBody, 0, 500));
+        http_response_code(502);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Sitemap currently unavailable\n";
+        exit;
+    }
+}
+
+if ($uri === '/robots.txt') {
+    $base = trim($frontendBaseUrl);
+    if ($base === '') {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host   = (string)($_SERVER['HTTP_HOST'] ?? '');
+        $base   = $host !== '' ? ($scheme . '://' . $host) : '';
+    }
+    $base = rtrim($base, '/');
+    $sitemapLine = $base !== '' ? ($base . '/sitemap.xml') : '/sitemap.xml';
+
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
+    echo "User-agent: *\n";
+    echo "Allow: /\n";
+    echo 'Sitemap: ' . $sitemapLine . "\n";
+    exit;
+}
+
 $slug = trim($uri, '/');
 
 if ($slug === '') {
@@ -177,7 +227,7 @@ try {
         . ' status=' . $e->statusCode
         . ' api_error=' . $e->apiError
         . ' body=' . substr($e->rawBody, 0, 500));
-    render502('Website');
+    render500('Website');
 }
 
 // -------------------------------------------------------
@@ -210,9 +260,9 @@ try {
     if (in_array($e->apiError, ['network_error', 'invalid_json'], true) 
         || $e->statusCode >= 500 
         || $e->statusCode === 0) {
-        render502($siteName);
+        render500($siteName);
     }
-    render502($siteName);
+    render500($siteName);
 }
 
 // -------------------------------------------------------
@@ -225,9 +275,10 @@ header('Pragma: no-cache');
 $pageTitle = (string)($page['title'] ?? 'Seite');
 $title = $pageTitle . ' – ' . $siteName;
 $blocks = is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+$seo = is_array($page['seo'] ?? null) ? $page['seo'] : [];
 
 try {
-    render('templates/layout.php', compact('siteName', 'title', 'pageTitle', 'blocks', 'navItems', 'slug'));
+    render('templates/layout.php', compact('siteName', 'title', 'pageTitle', 'blocks', 'navItems', 'slug', 'seo'));
 } catch (Throwable) {
-    render502($siteName);
+    render500($siteName);
 }

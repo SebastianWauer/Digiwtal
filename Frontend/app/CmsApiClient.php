@@ -101,6 +101,27 @@ class CmsApiClient
         return $this->get('/navigation');
     }
 
+    /**
+     * GET /sitemap.xml on CMS frontend host.
+     */
+    public function getSitemapXml(?string $sitemapUrl = null): string
+    {
+        $url = $sitemapUrl !== null && trim($sitemapUrl) !== ''
+            ? trim($sitemapUrl)
+            : $this->deriveSitemapUrl();
+
+        [$status, $body] = $this->request($url, [
+            'Accept: application/xml, text/xml;q=0.9, */*;q=0.1',
+            'User-Agent: DigiWTAL-Frontend/1.0',
+        ]);
+
+        if ($status >= 400) {
+            throw new CmsApiException($status, 'http_error', $body, 'Failed to fetch sitemap');
+        }
+
+        return (string)$body;
+    }
+
     // -------------------------------------------------------
     // Internal: GET with optional file cache
     // -------------------------------------------------------
@@ -253,5 +274,24 @@ class CmsApiClient
             @mkdir($dir, 0755, true);
         }
         @file_put_contents($path, $body, LOCK_EX);
+    }
+
+    private function deriveSitemapUrl(): string
+    {
+        $base = $this->baseUrl;
+        $patterns = [
+            '#/api\.php/api/v1/?$#i',
+            '#/api/v1/?$#i',
+            '#/api\.php/?$#i',
+            '#/api/?$#i',
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $base) === 1) {
+                $base = preg_replace($pattern, '', $base) ?? $base;
+                break;
+            }
+        }
+
+        return rtrim($base, '/') . '/sitemap.xml';
     }
 }

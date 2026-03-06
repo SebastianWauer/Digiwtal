@@ -47,5 +47,9 @@ interface PageRepositoryInterface
     public function softDelete(int $id): void;
     public function restore(int $id): void;
     public function slugExists(string $slug, ?int $ignoreId = null): bool;
+    public function createRevision(int $pageId, string $title, string $contentJson, ?int $createdBy = null): void;
+    public function listRevisions(int $pageId, int $limit = 20): array;
+    public function findRevision(int $pageId, int $revisionId): ?array;
+    public function pruneRevisions(int $pageId, int $keep = 50): void;
     public function purgeDeleted(): int;
 }

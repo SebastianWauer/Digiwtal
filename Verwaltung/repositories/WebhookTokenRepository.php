@@ -45,7 +45,7 @@ class WebhookTokenRepository
     public function listAllEncrypted(): array
     {
         $rows = $this->pdo->query(
-            'SELECT id, customer_id, token_enc, token_nonce, token_tag, deploy_type, label
+            'SELECT id, customer_id, token_enc, token_nonce, token_tag, token_hash, deploy_type, label
              FROM webhook_tokens ORDER BY id ASC'
         )->fetchAll(PDO::FETCH_ASSOC);
         return is_array($rows) ? $rows : [];
@@ -56,16 +56,69 @@ class WebhookTokenRepository
         string $tokenEnc,
         string $tokenNonce,
         string $tokenTag,
+        string $tokenHash,
         string $deployType,
         string $label
     ): int {
         $stmt = $this->pdo->prepare(
             'INSERT INTO webhook_tokens
-                (customer_id, token_enc, token_nonce, token_tag, deploy_type, label)
-             VALUES (?, ?, ?, ?, ?, ?)'
+                (customer_id, token_enc, token_nonce, token_tag, token_hash, deploy_type, label)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$customerId, $tokenEnc, $tokenNonce, $tokenTag, $deployType, $label]);
+        $stmt->execute([$customerId, $tokenEnc, $tokenNonce, $tokenTag, $tokenHash, $deployType, $label]);
         return (int)$this->pdo->lastInsertId();
+    }
+
+    public function findByTokenHash(string $tokenHash): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, customer_id, token_enc, token_nonce, token_tag, token_hash, deploy_type, label
+             FROM webhook_tokens
+             WHERE token_hash = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$tokenHash]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return is_array($row) ? $row : null;
+    }
+
+    public function backfillMissingTokenHashes(): int
+    {
+        $stmt = $this->pdo->query(
+            "SELECT id, customer_id, token_enc, token_nonce, token_tag
+             FROM webhook_tokens
+             WHERE token_hash IS NULL OR token_hash = ''"
+        );
+        $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        if (!is_array($rows) || $rows === []) {
+            return 0;
+        }
+
+        $updated = 0;
+        $upd = $this->pdo->prepare('UPDATE webhook_tokens SET token_hash = ? WHERE id = ?');
+
+        foreach ($rows as $row) {
+            $customerId = (int)($row['customer_id'] ?? 0);
+            if ($customerId <= 0) {
+                continue;
+            }
+
+            try {
+                $token = VaultCrypto::decrypt(
+                    (string)($row['token_enc'] ?? ''),
+                    (string)($row['token_nonce'] ?? ''),
+                    (string)($row['token_tag'] ?? ''),
+                    'webhook:' . $customerId
+                );
+                $tokenHash = hash('sha256', $token);
+                $upd->execute([$tokenHash, (int)$row['id']]);
+                $updated++;
+            } catch (Throwable) {
+                // skip invalid/corrupt token rows
+            }
+        }
+
+        return $updated;
     }
 
     public function updateLastUsed(int $id): void

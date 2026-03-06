@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class MediaUsageRepositoryDb
+final class MediaUsageRepositoryDb implements MediaUsageRepositoryInterface
 {
     public function __construct(private PDO $pdo) {}
 

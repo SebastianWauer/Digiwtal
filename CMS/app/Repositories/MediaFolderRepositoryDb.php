@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class MediaFolderRepositoryDb
+final class MediaFolderRepositoryDb implements MediaFolderRepositoryInterface
 {
     public function __construct(private PDO $pdo) {}
 

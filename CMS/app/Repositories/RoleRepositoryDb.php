@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class RoleRepositoryDb
+final class RoleRepositoryDb implements RoleRepositoryInterface
 {
     private const SYSTEM_ROLE_KEY = 'admin';
 

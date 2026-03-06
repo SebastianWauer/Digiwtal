@@ -201,6 +201,23 @@ class DeployService
                 (string)($encData['db_password_tag'] ?? ''),
                 $aad
             );
+            $setupToken = '';
+            if (
+                !empty($encData['deploy_token_enc'])
+                && !empty($encData['deploy_token_nonce'])
+                && !empty($encData['deploy_token_tag'])
+            ) {
+                try {
+                    $setupToken = VaultCrypto::decrypt(
+                        (string)$encData['deploy_token_enc'],
+                        (string)$encData['deploy_token_nonce'],
+                        (string)$encData['deploy_token_tag'],
+                        $aad
+                    );
+                } catch (Throwable) {
+                    $setupToken = '';
+                }
+            }
 
             $method = $this->resolveTransferMethod($access);
             if ($method === null) {
@@ -284,7 +301,7 @@ class DeployService
                 $this->log($deploymentId, "[INFO] {$uploaded}/{$totalFiles} Dateien übertragen.");
             }
 
-            $envContent = $this->cmsProvisioner->buildEnvContent($access, $dbPassword);
+            $envContent = $this->cmsProvisioner->buildEnvContent($access, $dbPassword, $setupToken);
             if (!$this->uploadRemoteTextFile($access, $password, $remotePath . '/.env', $envContent, $method)) {
                 $this->log($deploymentId, '[ERROR] .env konnte nicht auf den Zielserver geschrieben werden.');
                 $this->deployRepo->markFinished($deploymentId, 'failed');
@@ -667,13 +684,25 @@ class DeployService
         $this->log($deploymentId, '[ROLLBACK] Rollback gestartet...');
 
         $lastBackup = $this->deployRepo->findLatestBackup($customerId);
-        if ($lastBackup === null) {
+        return $this->rollbackWithBackupRecord($deploymentId, $lastBackup);
+    }
+
+    public function rollbackFromDeployment(int $deploymentId, int $customerId, int $targetDeploymentId): bool
+    {
+        $this->log($deploymentId, '[ROLLBACK] Rollback für Deployment #' . $targetDeploymentId . ' gestartet...');
+        $backup = $this->deployRepo->findBackupByDeployment($customerId, $targetDeploymentId);
+        return $this->rollbackWithBackupRecord($deploymentId, $backup);
+    }
+
+    private function rollbackWithBackupRecord(int $deploymentId, ?array $backup): bool
+    {
+        if ($backup === null) {
             $this->log($deploymentId, '[ROLLBACK] Kein Backup gefunden – Rollback nicht möglich.');
             $this->deployRepo->updateStatus($deploymentId, 'failed');
             return false;
         }
 
-        $metaFile = (string)($lastBackup['backup_path'] ?? '') . '/backup_meta.json';
+        $metaFile = (string)($backup['backup_path'] ?? '') . '/backup_meta.json';
         if (!is_file($metaFile)) {
             $this->log($deploymentId, '[ROLLBACK] Backup-Metadata nicht gefunden: ' . $metaFile);
             $this->deployRepo->updateStatus($deploymentId, 'failed');

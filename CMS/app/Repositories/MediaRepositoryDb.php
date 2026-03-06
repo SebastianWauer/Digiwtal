@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class MediaRepositoryDb
+final class MediaRepositoryDb implements MediaRepositoryInterface
 {
     public function __construct(private PDO $pdo) {}
 
@@ -31,8 +31,8 @@ public function create(array $data): int
     $stmt->bindParam(':title', $data['title'], PDO::PARAM_STR);
     $stmt->bindParam(':alt_text', $data['alt_text'], PDO::PARAM_STR);
     $stmt->bindParam(':description', $data['description'], PDO::PARAM_STR);
-    $stmt->bindParam(':focus_x', $data['focus_x'], PDO::PARAM_INT);
-    $stmt->bindParam(':focus_y', $data['focus_y'], PDO::PARAM_INT);
+    $stmt->bindParam(':focus_x', $data['focus_x']);
+    $stmt->bindParam(':focus_y', $data['focus_y']);
     $stmt->bindParam(':usage_count', $data['usage_count'], PDO::PARAM_INT);
     $stmt->bindParam(':created_at', $data['created_at'], PDO::PARAM_STR);
 
@@ -129,6 +129,52 @@ public function updateMediaPath(int $mediaId, string $path): bool
         $rows = $st->fetchAll();
 
         return is_array($rows) ? $rows : [];
+    }
+
+    public function countActive(
+        ?int $folderId = null,
+        string $q = '',
+        string $ext = '',
+        bool $onlyUnused = false
+    ): int {
+        $q   = trim($q);
+        $ext = trim($ext);
+
+        $sql = "
+            SELECT COUNT(*) AS c
+            FROM media_items mi
+            WHERE mi.is_deleted = 0
+        ";
+        $params = [];
+
+        if ($folderId !== null && $folderId > 0) {
+            $sql .= " AND mi.folder_id = :fid";
+            $params[':fid'] = (int)$folderId;
+        }
+
+        if ($ext !== '') {
+            $sql .= " AND mi.ext = :ext";
+            $params[':ext'] = $ext;
+        }
+
+        if ($onlyUnused) {
+            $sql .= " AND mi.usage_count = 0";
+        }
+
+        if ($q !== '') {
+            $sql .= " AND (
+                mi.display_filename LIKE :q
+                OR mi.original_filename LIKE :q
+                OR mi.title LIKE :q
+                OR mi.alt_text LIKE :q
+                OR mi.description LIKE :q
+            )";
+            $params[':q'] = '%' . $q . '%';
+        }
+
+        $st = $this->pdo->prepare($sql);
+        $st->execute($params);
+        return (int)($st->fetchColumn() ?: 0);
     }
 
     public function listDeleted(string $q = '', string $ext = '', int $limit = 200, int $offset = 0): array

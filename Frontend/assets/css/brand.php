@@ -38,7 +38,7 @@ require_once dirname(__DIR__, 2) . '/app/CmsApiClient.php';
 $baseUrl  = (string)(getenv('CMS_API_URL')   ?: '');
 $token    = (string)(getenv('CMS_API_TOKEN') ?: '');
 $timeout  = (int)(getenv('CMS_TIMEOUT')      ?: 5);
-$cacheTtl = (int)(getenv('CMS_CACHE_TTL')    ?: 0);
+$cacheTtl = (int)(getenv('CMS_CACHE_TTL') ?: 300);
 
 // -------------------------------------------------------
 // Defaults
@@ -55,7 +55,7 @@ if ($baseUrl !== '') {
         baseUrl:  $baseUrl,
         token:    $token !== '' ? $token : null,
         timeout:  $timeout,
-        cacheTtl: 0,
+        cacheTtl: $cacheTtl,
         cacheDir: dirname(__DIR__, 2) . '/storage/cache'
     );
 
@@ -88,8 +88,7 @@ if ($baseUrl !== '') {
 // Output CSS
 // -------------------------------------------------------
 header('Content-Type: text/css; charset=utf-8');
-header('Cache-Control: no-store, no-cache, must-revalidate');
-header('Pragma: no-cache');
+header('Cache-Control: public, max-age=300, stale-while-revalidate=60');
 ?>:root {
   --color-primary:   <?php echo $colorPrimary; ?>;
   --color-secondary: <?php echo $colorSecondary; ?>;

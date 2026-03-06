@@ -15,9 +15,15 @@ foreach ($blocks ?? [] as $block):
     }
     
     $template = match ($type) {
-        'text' => 'templates/blocks/text.php',
-        'hero' => 'templates/blocks/hero.php',
-        default => 'templates/blocks/unknown.php',
+        'text'    => 'themes/default/blocks/text.php',
+        'hero'    => 'themes/default/blocks/hero.php',
+        'image'   => 'themes/default/blocks/image.php',
+        'columns' => 'themes/default/blocks/columns.php',
+        'cta'     => 'themes/default/blocks/cta.php',
+        'faq'     => 'themes/default/blocks/faq.php',
+        'gallery' => 'themes/default/blocks/gallery.php',
+        'video'   => 'themes/default/blocks/video.php',
+        default   => 'templates/blocks/unknown.php',
     };
     
     render($template, compact('block', 'data'));

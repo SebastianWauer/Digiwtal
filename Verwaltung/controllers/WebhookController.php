@@ -19,34 +19,11 @@ class WebhookController
             return;
         }
 
-        $body = json_decode((string)file_get_contents('php://input'), true);
-        $requestedCustomerId = isset($body['customer_id']) ? (int)$body['customer_id'] : null;
+        // One-time backfill for legacy rows without token_hash.
+        $this->webhookRepo->backfillMissingTokenHashes();
 
-        $allTokens = $this->webhookRepo->listAllEncrypted();
-        $matched = null;
-
-        foreach ($allTokens as $row) {
-            $customerId = (int)($row['customer_id'] ?? 0);
-            if ($requestedCustomerId !== null && $requestedCustomerId !== $customerId) {
-                continue;
-            }
-
-            try {
-                $aad = 'webhook:' . $customerId;
-                $plaintext = VaultCrypto::decrypt(
-                    (string)$row['token_enc'],
-                    (string)$row['token_nonce'],
-                    (string)$row['token_tag'],
-                    $aad
-                );
-                if (hash_equals($plaintext, $rawToken)) {
-                    $matched = $row;
-                    break;
-                }
-            } catch (Throwable) {
-                continue;
-            }
-        }
+        $tokenHash = hash('sha256', $rawToken);
+        $matched = $this->webhookRepo->findByTokenHash($tokenHash);
 
         if ($matched === null) {
             $this->json(['error' => 'Invalid token'], 403);
@@ -76,11 +53,12 @@ class WebhookController
         );
 
         try {
-            $success = $this->deployService->run($deploymentId, $customerId, $deployType);
+            $queued = $this->enqueueDeployWorker('run', $deploymentId, $customerId, $deployType);
             $this->webhookRepo->updateLastUsed((int)$matched['id']);
 
-            if (!$success) {
-                $this->json(['error' => 'Deploy failed', 'deployment_id' => $deploymentId], 500);
+            if (!$queued) {
+                $this->deploymentRepo->markFinished($deploymentId, 'failed');
+                $this->json(['error' => 'Deploy queue failed', 'deployment_id' => $deploymentId], 500);
                 return;
             }
 
@@ -93,14 +71,40 @@ class WebhookController
 
             $this->json([
                 'ok' => true,
+                'queued' => true,
                 'deployment_id' => $deploymentId,
                 'customer_id' => $customerId,
                 'type' => $deployType,
-            ], 200);
+            ], 202);
         } catch (Throwable $e) {
-            error_log('[WEBHOOK] Deploy failed: ' . $e->getMessage());
+            FileLogger::channel('verwaltung')->error('[WEBHOOK] Deploy failed: ' . $e->getMessage());
             $this->json(['error' => 'Deploy failed', 'deployment_id' => $deploymentId], 500);
         }
+    }
+
+    private function enqueueDeployWorker(string $mode, int $deploymentId, int $customerId, string $type): bool
+    {
+        $workerPath = dirname(__DIR__) . '/scripts/deploy_worker.php';
+        if (!is_file($workerPath)) {
+            FileLogger::channel('verwaltung')->error('[WEBHOOK] Worker-Script fehlt: ' . $workerPath);
+            return false;
+        }
+
+        $cmd = 'php '
+            . escapeshellarg($workerPath)
+            . ' --mode=' . escapeshellarg($mode)
+            . ' --deployment-id=' . (int)$deploymentId
+            . ' --customer-id=' . (int)$customerId
+            . ' --type=' . escapeshellarg($type)
+            . ' > /dev/null 2>&1 &';
+
+        exec($cmd, $output, $exitCode);
+        if ($exitCode !== 0) {
+            FileLogger::channel('verwaltung')->error('[WEBHOOK] Worker konnte nicht gestartet werden. exit=' . $exitCode);
+            return false;
+        }
+
+        return true;
     }
 
     private function json(array $payload, int $status): void

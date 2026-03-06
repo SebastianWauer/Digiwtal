@@ -258,6 +258,42 @@
   cursor: grabbing;
 }
 
+.media-lightbox{
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.media-lightbox__backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.media-lightbox__panel{
+  position: relative;
+  z-index: 1;
+  width: min(92vw, 1200px);
+  max-height: 92vh;
+  margin: 4vh auto;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.media-lightbox__close{
+  justify-self: end;
+}
+
+.media-lightbox__image{
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.16);
+}
+
 /* ✅ Drop highlight */
 .media-folder.is-dropover {
   border-color: rgba(255,255,255,0.35);

@@ -30,6 +30,7 @@ declare(strict_types=1);
         $_ENV[$k] = $v;
     }
 })();
+require_once dirname(__DIR__, 2) . '/shared/FileLogger.php';
 
 // -------------------------------------------------------
 // Error Handling (DEV/PROD aware)
@@ -65,7 +66,7 @@ if (!defined('EXCEPTION_HANDLER_SET')) {
             $e->getLine(),
             $e->getTraceAsString()
         );
-        error_log($logMsg);
+        FileLogger::channel('verwaltung')->error($logMsg);
 
         if (php_sapi_name() === 'cli') {
             echo "FATAL ERROR [$errorId]: " . $e->getMessage() . "\n";

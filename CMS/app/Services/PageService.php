@@ -7,6 +7,8 @@ use App\Repositories\PageRepositoryInterface;
 
 final class PageService
 {
+    private const MAX_CONTENT_JSON_BYTES = 10_000_000; // 10 MB
+
     public function __construct(private PageRepositoryInterface $repo) {}
 
     public function normalizeSlug(string $slug): string
@@ -59,7 +61,8 @@ final class PageService
         bool $navVisible,
         string $navLabel,
         string $navArea,
-        int $navOrder
+        int $navOrder,
+        ?int $createdBy = null
     ): array {
         $title = trim($title);
         if ($title === '') {
@@ -90,6 +93,14 @@ final class PageService
         // Validiert + normalisiert PageBuilder JSON (unbekannte Blöcke/Felder entfernen, Strings trimmen)
         $contentJson = (new \App\PageBuilder\BlockValidator(new \App\PageBuilder\BlockRegistry()))->validateJson($contentJson);
 
+        if (strlen($contentJson) > self::MAX_CONTENT_JSON_BYTES) {
+            return [
+                'ok' => false,
+                'flash' => ['type' => 'error', 'msg' => 'Inhalt zu groß (max. 10 MB).'],
+                'id' => (int)($id ?? 0),
+            ];
+        }
+
         $decoded = json_decode($contentJson, true);
         if (!is_array($decoded)) {
             return ['ok' => false, 'flash' => ['type'=>'error','msg'=>'Inhalt ist kein gültiges JSON.'], 'id' => (int)($id ?? 0)];
@@ -119,6 +130,8 @@ final class PageService
                 $navArea,
                 $navOrder
             );
+            $this->repo->createRevision($newId, $title, $contentJson, $createdBy);
+            $this->repo->pruneRevisions($newId, 50);
             if ($isHome) $this->repo->setHome($newId);
             \App\Core\Hooks::do_action('cms_after_page_save', $newId, $slug);
             return ['ok' => true, 'flash' => ['type'=>'ok','msg'=>'Seite angelegt.'], 'id' => $newId];
@@ -138,6 +151,8 @@ final class PageService
             $navArea,
             $navOrder
         );
+        $this->repo->createRevision($id, $title, $contentJson, $createdBy);
+        $this->repo->pruneRevisions($id, 50);
         if ($isHome) $this->repo->setHome($id);
 
         \App\Core\Hooks::do_action('cms_after_page_save', $id, $slug);

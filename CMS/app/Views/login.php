@@ -46,6 +46,7 @@
 
           <div class="actions">
             <button type="submit" class="btn">Login</button>
+            <a href="/password-reset" class="btn btn--ghost">Passwort vergessen?</a>
           </div>
 
           <p class="hint">

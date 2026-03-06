@@ -23,7 +23,7 @@ class WebhookManageController
         try {
             $tokens = $this->webhookRepo->listByCustomer($customerId);
         } catch (Throwable $e) {
-            error_log('[WEBHOOK_MANAGE] ' . $e->getMessage());
+            FileLogger::channel('verwaltung')->error('[WEBHOOK_MANAGE] ' . $e->getMessage());
             $tokens = [];
             $_SESSION['flash_errors'] = ['Webhook-Tokens konnten nicht geladen werden. Bitte SQL-Fehler im Server-Log prüfen.'];
         }
@@ -72,6 +72,7 @@ class WebhookManageController
             $enc['ciphertext_b64'],
             $enc['nonce_b64'],
             $enc['tag_b64'],
+            hash('sha256', $plainToken),
             $deployType,
             $label !== '' ? $label : 'Webhook'
         );

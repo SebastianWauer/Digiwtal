@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class RolePermissionRepositoryDb
+final class RolePermissionRepositoryDb implements RolePermissionRepositoryInterface
 {
     public function __construct(private PDO $pdo)
     {

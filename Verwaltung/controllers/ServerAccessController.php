@@ -190,7 +190,7 @@ class ServerAccessController
                 }
                 $gcmAvailable = in_array('aes-256-gcm', openssl_get_cipher_methods(), true);
                 
-                error_log(sprintf(
+                FileLogger::channel('verwaltung')->error(sprintf(
                     "[VAULT_ERROR] Password encryption failed: %s | VAULT_KEY set: %s, len: %d | GCM available: %s | PHP: %s | OpenSSL: %s",
                     $e->getMessage(),
                     $keySet ? 'yes' : 'no',

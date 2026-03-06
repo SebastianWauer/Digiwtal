@@ -21,6 +21,10 @@ if (!empty($_GET['picker'])) {
 echo flash_render($flash ?? null);
 $pickerMode = (($_GET['picker'] ?? '') === '1');
 $view = ($view === 'list') ? 'list' : 'grid';
+$page = max(1, (int)($page ?? 1));
+$perPage = max(1, (int)($perPage ?? 40));
+$totalPages = max(1, (int)($totalPages ?? 1));
+$total = max(0, (int)($total ?? 0));
 
 $canEdit   = (function_exists('admin_can') && admin_can('media.edit'));
 $canDelete = (function_exists('admin_can') && admin_can('media.delete'));
@@ -183,6 +187,7 @@ function media_render_folder_nodes(
   <!-- Filters -->
   <form method="get" action="/media" class="media-filters">
     <input type="hidden" name="folder" value="<?= (int)$folderId ?>">
+    <input type="hidden" name="per_page" value="<?= (int)$perPage ?>">
 
     <div class="media-filters__row">
       <div class="media-filters__field">
@@ -347,7 +352,12 @@ function media_render_folder_nodes(
                     <!-- ✅ FIX: Aktionen müssen in eine eigene TD-Zelle -->
                     <td class="media-col-actions">
                       <?php if ($pickerMode): ?>
-                      <button type="button" class="btn btn--primary btn--sm" data-pick-id="<?= (int)$id ?>">Auswählen</button>
+                      <button
+                        type="button"
+                        class="btn btn--primary btn--sm"
+                        data-pick-id="<?= (int)$id ?>"
+                        data-pick-url="/media/file?id=<?= (int)$id ?>"
+                      >Auswählen</button>
                     <?php else: ?>
                       <a class="btn btn--ghost btn--sm" href="/media/edit?id=<?= (int)$id ?>">Details</a>
                     <?php endif; ?>
@@ -422,7 +432,12 @@ function media_render_folder_nodes(
                       </span>
                     </td>
                     <?php if ($pickerMode): ?>
-                      <button type="button" class="btn btn--primary btn--sm" data-pick-id="<?= (int)$id ?>">Auswählen</button>
+                      <button
+                        type="button"
+                        class="btn btn--primary btn--sm"
+                        data-pick-id="<?= (int)$id ?>"
+                        data-pick-url="/media/file?id=<?= (int)$id ?>"
+                      >Auswählen</button>
                     <?php else: ?>
                       <a class="btn btn--ghost btn--sm" href="/media/edit?id=<?= (int)$id ?>">Details</a>
                     <?php endif; ?>
@@ -435,9 +450,47 @@ function media_render_folder_nodes(
 
       <?php endif; ?>
 
+      <?php
+        $baseParams = [
+          'folder' => (int)$folderId,
+          'view' => $view,
+          'q' => $q,
+          'ext' => $ext,
+          'per_page' => (int)$perPage,
+        ];
+        if ($onlyUnused) {
+            $baseParams['unused'] = '1';
+        }
+        if ($pickerMode) {
+            $baseParams['picker'] = '1';
+        }
+        $prevParams = array_merge($baseParams, ['page' => max(1, $page - 1)]);
+        $nextParams = array_merge($baseParams, ['page' => min($totalPages, $page + 1)]);
+      ?>
+      <div class="media-content__bar">
+        <div class="media-bulk__left">
+          <a class="btn btn--ghost btn--sm <?= $page <= 1 ? 'is-disabled' : '' ?>" href="/media?<?= h(http_build_query($prevParams)) ?>" <?= $page <= 1 ? 'aria-disabled="true"' : '' ?>>Zurück</a>
+          <span class="pages-hint">Seite <?= (int)$page ?> / <?= (int)$totalPages ?> · <?= (int)$total ?> Medien</span>
+          <a class="btn btn--ghost btn--sm <?= $page >= $totalPages ? 'is-disabled' : '' ?>" href="/media?<?= h(http_build_query($nextParams)) ?>" <?= $page >= $totalPages ? 'aria-disabled="true"' : '' ?>>Weiter</a>
+        </div>
+      </div>
+
     </section>
   </div>
 </div>
+
+<?php if (!$pickerMode): ?>
+<div class="media-lightbox" id="mediaLightbox" hidden>
+  <div class="media-lightbox__backdrop" data-media-lightbox-close="1"></div>
+  <div class="media-lightbox__panel" role="dialog" aria-modal="true" aria-label="Bildvorschau">
+    <button type="button" class="btn btn--ghost btn--sm media-lightbox__close" data-media-lightbox-close="1">Schließen</button>
+    <img id="mediaLightboxImage" class="media-lightbox__image" alt="">
+    <div class="media-lightbox__actions">
+      <a id="mediaLightboxEdit" class="btn btn--primary btn--sm" href="/media">Zur Bearbeitung</a>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <?php if ($canEdit): ?>
 <script>
@@ -676,15 +729,74 @@ function media_render_folder_nodes(
 })();
 </script>
 <?php endif; ?>
+<?php if (!$pickerMode): ?>
+<script>
+(() => {
+  const lightbox = document.getElementById('mediaLightbox');
+  const imageEl = document.getElementById('mediaLightboxImage');
+  const editEl = document.getElementById('mediaLightboxEdit');
+  if (!lightbox || !imageEl || !editEl) return;
+
+  function closeLightbox() {
+    lightbox.hidden = true;
+    imageEl.removeAttribute('src');
+    document.body.style.overflow = '';
+  }
+
+  function openLightbox(mediaId) {
+    const id = parseInt(String(mediaId || '0'), 10);
+    if (!id) return;
+    imageEl.src = '/media/file?id=' + id;
+    editEl.href = '/media/edit?id=' + id;
+    lightbox.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  document.addEventListener('click', (e) => {
+    const closeTarget = e.target.closest('[data-media-lightbox-close="1"]');
+    if (closeTarget) {
+      e.preventDefault();
+      closeLightbox();
+      return;
+    }
+
+    const previewImage = e.target.closest('.media-col-preview img, .media-card__thumb img');
+    if (!previewImage) return;
+    const item = previewImage.closest('[data-media-id]');
+    if (!item) return;
+    e.preventDefault();
+    openLightbox(item.getAttribute('data-media-id'));
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !lightbox.hidden) {
+      closeLightbox();
+    }
+  });
+})();
+</script>
+<?php endif; ?>
 <?php if ($pickerMode): ?>
 <script>
 document.addEventListener('click', function(e){
   const btn = e.target.closest('[data-pick-id]');
   if (!btn) return;
   const id = parseInt(btn.getAttribute('data-pick-id'), 10) || 0;
+  const url = String(btn.getAttribute('data-pick-url') || '').trim();
   if (id <= 0) return;
+  if (!url) return;
 
-  window.parent.postMessage({ type: 'media-picked', id: id }, '*');
+  if (window.opener && !window.opener.closed) {
+    window.opener.postMessage({ type: 'media_picked', url: url }, '*');
+    window.opener.postMessage({ type: 'media-picked', id: id }, '*');
+    window.close();
+    return;
+  }
+
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'media_picked', url: url }, '*');
+    window.parent.postMessage({ type: 'media-picked', id: id }, '*');
+  }
 });
 </script>
 <?php endif; ?>

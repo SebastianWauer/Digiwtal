@@ -25,7 +25,7 @@ class PushService
     public function sendToAll(array $subscriptions, string $title, string $body, string $url = '/admin/dashboard', string $tag = 'digiwtal'): int
     {
         if (!$this->isConfigured()) {
-            error_log('[PUSH] VAPID keys not configured – skipping');
+            FileLogger::channel('verwaltung')->error('[PUSH] VAPID keys not configured – skipping');
             return 0;
         }
 
@@ -47,7 +47,7 @@ class PushService
                 );
                 if ($success) $sent++;
             } catch (Throwable $e) {
-                error_log('[PUSH] sendOne failed: ' . $e->getMessage());
+                FileLogger::channel('verwaltung')->error('[PUSH] sendOne failed: ' . $e->getMessage());
             }
         }
         return $sent;

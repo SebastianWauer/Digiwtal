@@ -26,7 +26,7 @@ class DeployController
         try {
             $deployments = $this->deploymentRepo->listByCustomer($customerId, 20);
         } catch (Throwable $e) {
-            error_log('[DEPLOY_HISTORY] ' . $e->getMessage());
+            FileLogger::channel('verwaltung')->error('[DEPLOY_HISTORY] ' . $e->getMessage());
             $deployments = [];
             $deploymentLoadErrors = [
                 'Deployments konnten nicht geladen werden.',
@@ -71,7 +71,7 @@ class DeployController
         $this->ensureNoRunningDeployment($customerId);
 
         $deploymentId = $this->deploymentRepo->create($customerId, 'cms', 'first_install');
-        $success = $this->deployService->provisionAndRun($deploymentId, $customer, $customerId, 'cms');
+        $queued = $this->enqueueDeployWorker('provision', $deploymentId, $customerId, 'cms');
 
         $this->audit->log(
             'deploy.first_install',
@@ -80,10 +80,11 @@ class DeployController
             'customer: ' . $customerId
         );
 
-        if ($success) {
-            $_SESSION['flash_success'] = 'Erstinstallation #' . $deploymentId . ' erfolgreich abgeschlossen.';
+        if ($queued) {
+            $_SESSION['flash_success'] = 'Erstinstallation #' . $deploymentId . ' wurde als Background-Job gestartet.';
         } else {
-            $_SESSION['flash_errors'] = ['Erstinstallation #' . $deploymentId . ' fehlgeschlagen. Details stehen im Deployment-Log.'];
+            $this->deploymentRepo->markFinished($deploymentId, 'failed');
+            $_SESSION['flash_errors'] = ['Erstinstallation #' . $deploymentId . ' konnte nicht gestartet werden.'];
         }
 
         header('Location: /admin/customers/' . $customerId . '/deployments');
@@ -109,18 +110,73 @@ class DeployController
 
         // Neuen Deployment-Eintrag für den Rollback anlegen
         $deploymentId = $this->deploymentRepo->create($customerId, 'cms', 'rollback');
-
-        $success = $this->deployService->rollback($deploymentId, $customerId);
+        $queued = $this->enqueueDeployWorker('rollback_latest', $deploymentId, $customerId, 'cms');
         $this->audit->log('deploy.rollback', 'deployment', $deploymentId, "customer: {$customerId}");
 
-        if ($success) {
-            $_SESSION['flash_success'] = 'Rollback #' . $deploymentId . ' erfolgreich.';
+        if ($queued) {
+            $_SESSION['flash_success'] = 'Rollback #' . $deploymentId . ' wurde als Background-Job gestartet.';
         } else {
-            $_SESSION['flash_errors'] = ['Rollback #' . $deploymentId . ' fehlgeschlagen oder manuell nötig. Siehe Log.'];
+            $this->deploymentRepo->markFinished($deploymentId, 'failed');
+            $_SESSION['flash_errors'] = ['Rollback #' . $deploymentId . ' konnte nicht gestartet werden.'];
         }
 
         header('Location: /admin/customers/' . $customerId . '/deployments');
         exit;
+    }
+
+    public function rollbackToDeployment(int $customerId, int $deploymentId): void
+    {
+        AdminAuth::requireAuth();
+
+        if (!Csrf::verify($_POST['csrf_token'] ?? '')) {
+            $_SESSION['flash_errors'] = ['CSRF token invalid'];
+            header('Location: /admin/customers/' . $customerId . '/deployments');
+            exit;
+        }
+
+        $target = $this->deploymentRepo->findById($deploymentId);
+        if ($target === null || (int)($target['customer_id'] ?? 0) !== $customerId) {
+            $_SESSION['flash_errors'] = ['Deployment nicht gefunden.'];
+            header('Location: /admin/customers/' . $customerId . '/deployments');
+            exit;
+        }
+
+        $rollbackDeploymentId = $this->deploymentRepo->create($customerId, 'cms', 'rollback:deployment:' . $deploymentId);
+        $queued = $this->enqueueDeployWorker('rollback_deployment', $rollbackDeploymentId, $customerId, 'cms', $deploymentId);
+        $this->audit->log('deploy.rollback.target', 'deployment', $rollbackDeploymentId, "customer: {$customerId}, target: {$deploymentId}");
+
+        if ($queued) {
+            $_SESSION['flash_success'] = 'Rollback-Job #' . $rollbackDeploymentId . ' auf Stand von Deployment #' . $deploymentId . ' gestartet.';
+        } else {
+            $this->deploymentRepo->markFinished($rollbackDeploymentId, 'failed');
+            $_SESSION['flash_errors'] = ['Rollback-Job konnte nicht gestartet werden.'];
+        }
+
+        header('Location: /admin/customers/' . $customerId . '/deployments');
+        exit;
+    }
+
+    public function status(int $customerId, int $deploymentId): void
+    {
+        AdminAuth::requireAuth();
+
+        $deployment = $this->deploymentRepo->findById($deploymentId);
+        if ($deployment === null || (int)($deployment['customer_id'] ?? 0) !== $customerId) {
+            http_response_code(404);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Deployment not found']);
+            return;
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'ok' => true,
+            'deployment_id' => (int)$deployment['id'],
+            'status' => (string)($deployment['status'] ?? 'pending'),
+            'started_at' => $deployment['started_at'] ?? null,
+            'finished_at' => $deployment['finished_at'] ?? null,
+            'log' => (string)($deployment['log'] ?? ''),
+        ]);
     }
 
     public function stop(int $customerId, int $deploymentId): void
@@ -203,7 +259,7 @@ class DeployController
                 $_SESSION['flash_success'] = $message;
             }
         } catch (Throwable $e) {
-            error_log('[DEPLOY_CONNECTION_TEST] ' . $e->getMessage());
+            FileLogger::channel('verwaltung')->error('[DEPLOY_CONNECTION_TEST] ' . $e->getMessage());
             $_SESSION['flash_errors'] = ['Verbindungstest abgebrochen: ' . $e->getMessage()];
         }
 
@@ -301,6 +357,41 @@ class DeployController
                 exit;
             }
         }
+    }
+
+    private function enqueueDeployWorker(
+        string $mode,
+        int $deploymentId,
+        int $customerId,
+        string $type = 'cms',
+        ?int $targetDeploymentId = null
+    ): bool {
+        $workerPath = dirname(__DIR__) . '/scripts/deploy_worker.php';
+        if (!is_file($workerPath)) {
+            FileLogger::channel('verwaltung')->error('[DEPLOY_QUEUE] Worker-Script fehlt: ' . $workerPath);
+            return false;
+        }
+
+        $parts = [
+            'php',
+            escapeshellarg($workerPath),
+            '--mode=' . escapeshellarg($mode),
+            '--deployment-id=' . (int)$deploymentId,
+            '--customer-id=' . (int)$customerId,
+            '--type=' . escapeshellarg($type),
+        ];
+        if ($targetDeploymentId !== null) {
+            $parts[] = '--target-deployment-id=' . (int)$targetDeploymentId;
+        }
+        $cmd = implode(' ', $parts) . ' > /dev/null 2>&1 &';
+
+        exec($cmd, $output, $exitCode);
+        if ($exitCode !== 0) {
+            FileLogger::channel('verwaltung')->error('[DEPLOY_QUEUE] Konnte Worker nicht starten. cmd=' . $cmd . ' exit=' . $exitCode);
+            return false;
+        }
+
+        return true;
     }
 
     private function testServerConnection(int $customerId, array $access, array $encData): array

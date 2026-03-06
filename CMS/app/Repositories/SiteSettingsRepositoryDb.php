@@ -3,7 +3,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class SiteSettingsRepositoryDb
+final class SiteSettingsRepositoryDb implements SiteSettingsRepositoryInterface
 {
     public function __construct(private PDO $pdo) {}
 

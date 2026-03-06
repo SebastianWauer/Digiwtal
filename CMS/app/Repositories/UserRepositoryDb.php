@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class UserRepositoryDb
+final class UserRepositoryDb implements UserRepositoryInterface
 {
     private const SYSTEM_ROLE_KEY = 'admin';
     private const SYSTEM_USERNAME = 'Admin';

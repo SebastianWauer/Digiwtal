@@ -31,10 +31,16 @@ $router = new Router();
  * UI Routes
  */
 $router->get('/', \App\Controller\DashboardController::class, 'handle');
-$router->get('/test', \App\Controller\TestController::class, 'handle');
+if ($isDev) {
+    $router->get('/test', \App\Controller\TestController::class, 'handle');
+}
 
 $router->get('/login', \App\Controller\LoginController::class, 'show');
 $router->post('/login', \App\Controller\LoginController::class, 'submit');
+$router->get('/password-reset', \App\Controller\PasswordResetController::class, 'showRequest');
+$router->post('/password-reset', \App\Controller\PasswordResetController::class, 'submitRequest');
+$router->get('/password-reset/{token:[a-f0-9]{64}}', \App\Controller\PasswordResetController::class, 'showResetForm');
+$router->post('/password-reset/{token:[a-f0-9]{64}}', \App\Controller\PasswordResetController::class, 'submitResetForm');
 
 $router->post('/logout', \App\Controller\LogoutController::class, 'handle');
 
@@ -67,6 +73,7 @@ $router->post('/backup/db', \App\Controller\BackupController::class, 'exportDb')
  * MEDIA (Module)
  */
 $router->get('/media', \App\Controller\MediaController::class, 'index');
+$router->get('/media/show', \App\Controller\MediaController::class, 'show');
 $router->get('/media/deleted', \App\Controller\MediaController::class, 'deleted');
 $router->get('/media/edit', \App\Controller\MediaController::class, 'edit');
 $router->post('/media/save', \App\Controller\MediaController::class, 'save');

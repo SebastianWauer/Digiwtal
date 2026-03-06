@@ -41,7 +41,7 @@ class VaultCrypto
         if ($ciphertext === false) {
             // ADDED: Log OpenSSL error
             $opensslError = openssl_error_string();
-            error_log("[VAULT] openssl_encrypt failed: " . ($opensslError ?: 'no error string'));
+            FileLogger::channel('verwaltung')->error("[VAULT] openssl_encrypt failed: " . ($opensslError ?: 'no error string'));
             throw new RuntimeException('encryption_failed');
         }
         

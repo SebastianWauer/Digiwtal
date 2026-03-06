@@ -132,4 +132,19 @@ class DeploymentRepository
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row !== false ? $row : null;
     }
+
+    public function findBackupByDeployment(int $customerId, int $deploymentId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT b.id, b.deployment_id, b.backup_path, b.file_count, b.created_at
+             FROM deployment_backups b
+             WHERE b.customer_id = ?
+               AND b.deployment_id = ?
+             ORDER BY b.created_at DESC
+             LIMIT 1'
+        );
+        $stmt->execute([$customerId, $deploymentId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row !== false ? $row : null;
+    }
 }

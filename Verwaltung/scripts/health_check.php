@@ -245,14 +245,14 @@ function sendMail(string $to, string $subject, string $body): void
 $customers = getActiveCustomers($pdo);
 
 // DEBUG: Log customer count
-if ($debugMode) { error_log("[HC] customers_count=" . count($customers)); }
+if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] customers_count=" . count($customers)); }
 
 // DEBUG: Test if health_checks table exists
 try {
     $pdo->query("SELECT 1 FROM health_checks LIMIT 1");
-    if ($debugMode) { error_log("[HC] health_checks_table=exists"); }
+    if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] health_checks_table=exists"); }
 } catch (Throwable $e) {
-    error_log("[HC] health_checks_table=error msg=" . $e->getMessage());
+    FileLogger::channel('verwaltung')->error("[HC] health_checks_table=error msg=" . $e->getMessage());
 }
 
 foreach ($customers as $customer) {
@@ -267,16 +267,16 @@ foreach ($customers as $customer) {
     $tokenTag = (string)$customer['health_token_tag'];
     
     // DEBUG: Log customer processing
-    if ($debugMode) { error_log("[HC] customer_id={$customerId} cms_url={$cmsHealthBase} frontend_url={$healthFrontendUrl}"); }
+    if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] customer_id={$customerId} cms_url={$cmsHealthBase} frontend_url={$healthFrontendUrl}"); }
     
     // Decrypt token
     $token = decryptToken($tokenEnc, $tokenNonce, $tokenTag, $customerId);
     if ($token === null) {
-        error_log("[HC] decrypt_failed customer_id={$customerId}");
+        FileLogger::channel('verwaltung')->error("[HC] decrypt_failed customer_id={$customerId}");
         continue; // Skip if decrypt fails
     }
     
-    if ($debugMode) { error_log("[HC] decrypt_ok customer_id={$customerId}"); }
+    if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] decrypt_ok customer_id={$customerId}"); }
     
     // CRITICAL: Get last status BEFORE performing check
     $lastStatus = getLastHealthStatus($pdo, $customerId);
@@ -294,12 +294,12 @@ foreach ($customers as $customer) {
     $result['response_ms'] = max((int)($result['response_ms'] ?? 0), (int)($frontendHealth['response_ms'] ?? 0));
     $newStatus = $result['status'];
     
-    if ($debugMode) { error_log("[HC] check_done customer_id={$customerId} status={$newStatus} response_ms={$result['response_ms']}"); }
+    if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] check_done customer_id={$customerId} status={$newStatus} response_ms={$result['response_ms']}"); }
     
     // Store result
     try {
         storeHealthCheck($pdo, $customerId, $result);
-        if ($debugMode) { error_log("[HC] insert_ok customer_id={$customerId}"); }
+        if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] insert_ok customer_id={$customerId}"); }
         
         // Synchronisation mit customer_health für Dashboard-Kompatibilität
         $mappedStatus = match($newStatus) {
@@ -313,10 +313,10 @@ foreach ($customers as $customer) {
             ON DUPLICATE KEY UPDATE status = VALUES(status), last_check_at = VALUES(last_check_at)
         ");
         $syncStmt->execute([$customerId, $mappedStatus]);
-        if ($debugMode) { error_log("[HC] sync_ok customer_id={$customerId}"); }
+        if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] sync_ok customer_id={$customerId}"); }
 
     } catch (Throwable $e) {
-        error_log("[HC] insert_failed customer_id={$customerId} err=" . $e->getMessage());
+        FileLogger::channel('verwaltung')->error("[HC] insert_failed customer_id={$customerId} err=" . $e->getMessage());
         continue; // Skip on DB error
     }
     
@@ -386,5 +386,5 @@ foreach ($customers as $customer) {
     }
 }
 
-if ($debugMode) { error_log("[HC] script_complete"); }
+if ($debugMode) { FileLogger::channel('verwaltung')->error("[HC] script_complete"); }
 exit(0);

@@ -34,7 +34,7 @@ class AuditLogger
                 $ip
             ]);
         } catch (Throwable $e) {
-            error_log('[AUDIT] Log failed: ' . $e->getMessage());
+            FileLogger::channel('verwaltung')->error('[AUDIT] Log failed: ' . $e->getMessage());
         }
     }
 

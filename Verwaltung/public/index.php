@@ -35,6 +35,8 @@ ini_set('log_errors', '1');
     }
 })();
 
+require_once dirname(__DIR__, 2) . '/shared/FileLogger.php';
+
 $allowedHost = (string)(getenv('ADMIN_HOST') ?: '');
 
 // HTTPS enforcement
@@ -199,6 +201,8 @@ $router->add('POST', '/admin/customers/{id}/deployments/install', [$deployContro
 $router->add('POST', '/admin/customers/{id}/deployments/test-connections', [$deployController, 'testConnections']);
 $router->add('POST', '/admin/customers/{id}/deployments/agent-payload', [$deployController, 'agentPayload']);
 $router->add('POST', '/admin/customers/{id}/deployments/{deploymentId}/stop', [$deployController, 'stop']);
+$router->add('GET',  '/admin/customers/{id}/deployments/{deploymentId}/status', [$deployController, 'status']);
+$router->add('POST', '/admin/customers/{id}/deployments/{deploymentId}/rollback', [$deployController, 'rollbackToDeployment']);
 $router->add('POST', '/admin/customers/{id}/deployments/rollback', [$deployController, 'rollback']);
 $router->add('POST', '/admin/push/subscribe',   [$pushController, 'subscribe']);
 $router->add('POST', '/admin/push/unsubscribe', [$pushController, 'unsubscribe']);

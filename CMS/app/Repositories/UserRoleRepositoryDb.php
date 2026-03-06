@@ -5,7 +5,7 @@ namespace App\Repositories;
 
 use PDO;
 
-final class UserRoleRepositoryDb
+final class UserRoleRepositoryDb implements UserRoleRepositoryInterface
 {
     public function __construct(private PDO $pdo) {}
 

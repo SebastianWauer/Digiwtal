@@ -63,6 +63,13 @@ if (!is_file($redirFile)) {
 
 require_once $pathsFile;
 require_once $redirFile;
+$sharedLogger = $ROOT . '/shared/FileLogger.php';
+$localLogger = $ROOT . '/app/FileLogger.php';
+if (is_file($sharedLogger)) {
+    require_once $sharedLogger;
+} elseif (is_file($localLogger)) {
+    require_once $localLogger;
+}
 
 require_once $ROOT . '/app/Core/Env.php';
 \App\Core\Env::load($ROOT);

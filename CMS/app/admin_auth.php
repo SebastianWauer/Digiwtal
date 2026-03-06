@@ -96,7 +96,14 @@ function admin_current_user(): ?array
     $hash = admin_hash_token($token);
     $pdo  = admin_pdo();
 
-    $stmt = $pdo->prepare("SELECT user_id, expires_at FROM login_tokens WHERE token_hash = :h LIMIT 1");
+    $stmt = $pdo->prepare("
+        SELECT lt.user_id, lt.expires_at
+        FROM login_tokens lt
+        JOIN users u ON u.id = lt.user_id
+        WHERE lt.token_hash = :h
+          AND u.enabled = 1
+        LIMIT 1
+    ");
     $stmt->execute([':h' => $hash]);
     $row = $stmt->fetch();
     if (!is_array($row)) {
@@ -355,32 +362,55 @@ function admin_log_login_attempt(string $username, bool $success, ?int $userId =
 }
 
 /**
- * IP-basiertes Rate-Limit: true = gesperrt (>= 5 Fehlversuche in 15 Min).
+ * Brute-Force-Rate-Limit: true = gesperrt (>= 5 Fehlversuche in 15 Min).
+ * Sperrt separat nach IP und nach Username (unabhängig von IP).
  * Fail-open bei DB-Fehler (return false).
  */
-function admin_check_brute_force(string $ip): bool
+function admin_check_brute_force(string $ip, string $username = ''): bool
 {
     static $cache = []; // request-scope cache
 
     $ip = trim($ip);
-    if ($ip === '') return false;
+    $usernameNorm = mb_strtolower(trim($username));
+    if ($ip === '' && $usernameNorm === '') return false;
 
-    if (array_key_exists($ip, $cache)) {
-        return (bool)$cache[$ip];
+    $cacheKey = $ip . '|' . $usernameNorm;
+    if (array_key_exists($cacheKey, $cache)) {
+        return (bool)$cache[$cacheKey];
     }
 
     try {
         $pdo  = admin_pdo();
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) FROM login_attempts
-            WHERE ip = :ip AND success = 0 AND created_at >= (NOW() - INTERVAL 15 MINUTE)
-        ");
-        $stmt->execute([':ip' => $ip]);
-        $count = (int)$stmt->fetchColumn();
-        $cache[$ip] = ($count >= 5);
-        return $cache[$ip];
+        $ipCount = 0;
+        if ($ip !== '') {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM login_attempts
+                WHERE ip = :ip
+                  AND success = 0
+                  AND created_at >= (NOW() - INTERVAL 15 MINUTE)
+            ");
+            $stmt->execute([':ip' => $ip]);
+            $ipCount = (int)$stmt->fetchColumn();
+        }
+
+        $usernameCount = 0;
+        if ($usernameNorm !== '') {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM login_attempts
+                WHERE LOWER(username) = :u
+                  AND success = 0
+                  AND created_at >= (NOW() - INTERVAL 15 MINUTE)
+            ");
+            $stmt->execute([':u' => $usernameNorm]);
+            $usernameCount = (int)$stmt->fetchColumn();
+        }
+
+        $cache[$cacheKey] = ($ipCount >= 5 || $usernameCount >= 5);
+        return $cache[$cacheKey];
     } catch (\Throwable) {
-        $cache[$ip] = false;
+        $cache[$cacheKey] = false;
         return false;
     }
 }
@@ -392,7 +422,7 @@ function admin_login(string $username, string $password): bool
     $username = trim($username);
     if ($username === '' || $password === '') return false;
 
-    if (admin_check_brute_force(admin_ip())) {
+    if (admin_check_brute_force(admin_ip(), $username)) {
         admin_log_login_attempt($username, false, null);
         try {
             $pdo->prepare("

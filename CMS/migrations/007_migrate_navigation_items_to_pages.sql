@@ -3,8 +3,9 @@
 -- Match: pages.slug = normalisierte navigation_items.url
 
 -- 1) Update: schreibe Navigation-Felder in pages
+-- Fix 2026-03-06: explizites JOIN-Keyword (INNER JOIN) für klare MySQL-Syntax
 UPDATE pages p
-JOIN (
+INNER JOIN (
   SELECT
     id,
     label,

@@ -147,6 +147,7 @@ final class MediaService
         }
 
         $created = [];
+        $tempFilesToCleanup = [];
 
         $this->pdo->beginTransaction();
         try {
@@ -156,6 +157,7 @@ final class MediaService
                 $tmpToStore = $nf['tmp'];
                 if ($nf['ext'] === 'svg') {
                     $tmpToStore = $this->sanitizeSvgToTempFile($nf['tmp']);
+                    $tempFilesToCleanup[] = $tmpToStore;
                 }
 
                 $displayBase = $this->sanitizeDisplayBaseName($nf['original']);
@@ -185,6 +187,7 @@ final class MediaService
 
                 if (in_array($nf['ext'], ['jpg','jpeg','png','webp'], true)) {
                     $tmpToStore = $this->optimizeRasterImageToTempFile($tmpToStore, $nf['ext'], 1920);
+                    $tempFilesToCleanup[] = $tmpToStore;
                 }
 
                 $dims = $this->detectDimensions($tmpToStore, $nf['ext']);
@@ -201,6 +204,10 @@ final class MediaService
                         throw new \RuntimeException('Datei konnte nicht gespeichert werden.');
                     }
                     @unlink($tmpToStore);
+                    $tempFilesToCleanup = array_values(array_filter(
+                        $tempFilesToCleanup,
+                        static fn (string $tmp): bool => $tmp !== $tmpToStore
+                    ));
                 }
 
                 @chmod($dest, 0644);
@@ -221,7 +228,14 @@ final class MediaService
 
             $this->pdo->commit();
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            foreach ($tempFilesToCleanup as $tmpPath) {
+                if (is_string($tmpPath) && $tmpPath !== '') {
+                    @unlink($tmpPath);
+                }
+            }
             throw $e;
         }
 
@@ -420,6 +434,12 @@ final class MediaService
 
         $svg = preg_replace('/<\s*script\b[^>]*>.*?<\s*\/\s*script\s*>/is', '', $svg) ?? $svg;
         $svg = preg_replace('/<\s*foreignObject\b[^>]*>.*?<\s*\/\s*foreignObject\s*>/is', '', $svg) ?? $svg;
+        $svg = preg_replace('/<\s*(animate|set|animateTransform)\b[^>]*>.*?<\s*\/\s*\1\s*>/is', '', $svg) ?? $svg;
+        $svg = preg_replace('/<\s*(animate|set|animateTransform)\b[^>]*\/\s*>/is', '', $svg) ?? $svg;
+        $svg = preg_replace('/<\s*use\b[^>]*\b(?:href|xlink:href)\s*=\s*([\'"])[^\'"]*\1[^>]*>.*?<\s*\/\s*use\s*>/is', '', $svg) ?? $svg;
+        $svg = preg_replace('/<\s*use\b[^>]*\b(?:href|xlink:href)\s*=\s*([\'"])[^\'"]*\1[^>]*\/\s*>/is', '', $svg) ?? $svg;
+        $svg = preg_replace('/<\s*image\b[^>]*\b(?:href|xlink:href)\s*=\s*([\'"])\s*data:[^\'"]*\1[^>]*>.*?<\s*\/\s*image\s*>/is', '', $svg) ?? $svg;
+        $svg = preg_replace('/<\s*image\b[^>]*\b(?:href|xlink:href)\s*=\s*([\'"])\s*data:[^\'"]*\1[^>]*\/\s*>/is', '', $svg) ?? $svg;
 
         $svg = preg_replace('/\son[a-z]+\s*=\s*"[^"]*"/i', '', $svg) ?? $svg;
         $svg = preg_replace("/\son[a-z]+\s*=\s*'[^']*'/i", '', $svg) ?? $svg;
@@ -439,7 +459,7 @@ final class MediaService
         return $tmp;
     }
 
-    function finalizeStorageFields(int $id, string $finalStorageFilename, ?int $w, ?int $h, int $sizeBytes): void
+    private function finalizeStorageFields(int $id, string $finalStorageFilename, ?int $w, ?int $h, int $sizeBytes): void
     {
         $st = $this->pdo->prepare("
             UPDATE media_items
