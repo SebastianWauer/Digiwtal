@@ -166,6 +166,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
           <div class="pages-edit-card-title pages-edit-pb-title" id="section-builder">PageBuilder</div>
           <div class="pages-edit-card-sub pages-edit-pb-sub">Text, Bild, Hero — Reihenfolge & Inhalte bearbeiten.</div>
 
+          <div class="pages-edit-builder">
           <?php if ($canSave): ?>
             <div class="pages-edit-pb-actions">
               <button type="button" class="btn btn--ghost btn--sm" id="pbUndoBtn">↩ Rückgängig</button>
@@ -185,7 +186,8 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
             </div>
           <?php endif; ?>
 
-          <div id="blocksContainer"></div>
+          <div id="blocksContainer" class="pages-edit-blocks"></div>
+          </div>
 
           <details class="pages-edit-raw">
             <summary class="pages-edit-raw__summary">Raw JSON anzeigen</summary>
@@ -371,6 +373,15 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       </div>
       <?php endif; ?>
 
+      <div class="pages-edit-card pages-edit-modal pages-edit-modal--block" id="modal-block-card">
+        <button type="button" class="pages-edit-modal__close" data-close-modal="block" aria-label="Schließen">×</button>
+        <div class="pages-edit-card-head">
+          <div class="pages-edit-card-title" id="modal-block-title">Block bearbeiten</div>
+        </div>
+        <div class="pages-edit-card-sub" id="modal-block-sub"></div>
+        <div class="pages-edit-fields" id="modal-block-fields"></div>
+      </div>
+
   <div class="pages-edit-floating-actions" aria-label="Seitenaktionen">
     <?php if ($canSave): ?>
       <button type="submit" class="pages-edit-iconbtn pages-edit-iconbtn--save" title="Speichern" aria-label="Speichern">💾</button>
@@ -436,7 +447,6 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
   let sortableInstance = null;
   const historyStack = [];
   let historyIndex = -1;
-  const collapsedBlocks = new Set();
 
   function safeParseJson(s) { try { return JSON.parse(s); } catch { return null; } }
   function ensureModel(model) {
@@ -465,6 +475,10 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
   const navigationModal = document.getElementById('modal-navigation-card');
   const seoModal = document.getElementById('modal-seo-card');
   const revisionsModal = document.getElementById('modal-revisions-card');
+  const blockModal = document.getElementById('modal-block-card');
+  const blockModalTitle = document.getElementById('modal-block-title');
+  const blockModalSub = document.getElementById('modal-block-sub');
+  const blockModalFields = document.getElementById('modal-block-fields');
   const statusToggle = document.querySelector('input[name="status_toggle"]');
   const statusHidden = document.getElementById('pageStatusHidden');
   const homeToggle = document.querySelector('input[name="is_home"]');
@@ -494,7 +508,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
   }
 
   function closeAllModals() {
-    [navigationModal, seoModal, revisionsModal].forEach((m) => m && m.classList.remove('is-open'));
+    [navigationModal, seoModal, revisionsModal, blockModal].forEach((m) => m && m.classList.remove('is-open'));
     if (modalBackdrop) {
       modalBackdrop.classList.remove('is-open');
       modalBackdrop.hidden = true;
@@ -578,16 +592,19 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       let data;
       if (b.data && typeof b.data === 'object') {
         data = b.data;
+      } else if (b.payload && typeof b.payload === 'object') {
+        // Legacy-Format aus älterem PageBuilder: {type, payload:{...}}
+        data = b.payload;
       } else {
         data = Object.assign({}, b);
         delete data.type;
         delete data.id;
+        delete data.payload;
+        delete data.position;
       }
       return { id: (typeof b.id === 'string' && b.id) ? b.id : uuid(), type, data };
     })
     .filter(b => defs[b.type]);
-
-  model.blocks.forEach((b) => collapsedBlocks.add(b.id));
 
   function snapshot() {
     return JSON.stringify({ blocks: model.blocks.map(b => ({ id: b.id, type: b.type, data: Object.assign({}, b.data) })) });
@@ -656,16 +673,101 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
     }
   }
 
-  window.addEventListener('message', (ev) => {
-    const data = (ev && ev.data && typeof ev.data === 'object') ? ev.data : null;
-    if (!data || data.type !== 'media_picked') return;
+  function mediaFileUrlFromId(id) {
+    const n = Number.parseInt(String(id || '0'), 10);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    return `/media/file?id=${n}`;
+  }
+
+  function mediaIdFromUrl(rawUrl) {
+    const url = String(rawUrl || '').trim();
+    if (url === '') return 0;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (!parsed.pathname.endsWith('/media/file')) return 0;
+      const id = Number.parseInt(parsed.searchParams.get('id') || '0', 10);
+      return Number.isFinite(id) && id > 0 ? id : 0;
+    } catch (_e) {
+      return 0;
+    }
+  }
+
+  function resolvePreviewImageSource(rawUrl, rawMediaId) {
+    const explicitId = Number.parseInt(String(rawMediaId || '0'), 10);
+    if (Number.isFinite(explicitId) && explicitId > 0) {
+      return {
+        primary: `/media/thumb?id=${explicitId}`,
+        fallback: `/media/file?id=${explicitId}`,
+      };
+    }
+
+    const idFromUrl = mediaIdFromUrl(rawUrl);
+    if (idFromUrl > 0) {
+      return {
+        primary: `/media/thumb?id=${idFromUrl}`,
+        fallback: `/media/file?id=${idFromUrl}`,
+      };
+    }
+
+    const direct = String(rawUrl || '').trim();
+    if (direct !== '') {
+      return { primary: direct, fallback: '' };
+    }
+    return { primary: '', fallback: '' };
+  }
+
+  function applyPickedMedia(nextUrl) {
     if (!activeMediaPickerInput) return;
-
-    const url = (typeof data.url === 'string') ? data.url.trim() : '';
+    const url = String(nextUrl || '').trim();
     if (url === '') return;
-
     activeMediaPickerInput.value = url;
     activeMediaPickerInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  window.addEventListener('message', (ev) => {
+    const data = (ev && ev.data && typeof ev.data === 'object') ? ev.data : null;
+    if (!data) return;
+    if (!activeMediaPickerInput) return;
+
+    let nextUrl = '';
+    if (data.type === 'media-picked') {
+      nextUrl = mediaFileUrlFromId(data.id);
+    } else if (data.type === 'media_picked') {
+      const rawUrl = (typeof data.url === 'string') ? data.url.trim() : '';
+      const parsedId = mediaIdFromUrl(rawUrl);
+      nextUrl = parsedId > 0 ? mediaFileUrlFromId(parsedId) : rawUrl;
+    } else {
+      return;
+    }
+
+    if (nextUrl === '') return;
+    applyPickedMedia(nextUrl);
+  });
+
+  window.addEventListener('storage', (ev) => {
+    if (!ev || ev.key !== 'cms_media_picked' || !ev.newValue) return;
+    if (!activeMediaPickerInput) return;
+    try {
+      const parsed = JSON.parse(ev.newValue);
+      const rawUrl = (parsed && typeof parsed.url === 'string') ? parsed.url.trim() : '';
+      const id = parsed ? parsed.id : 0;
+      const nextUrl = rawUrl !== '' ? rawUrl : mediaFileUrlFromId(id);
+      if (nextUrl !== '') applyPickedMedia(nextUrl);
+    } catch (_e) {}
+  });
+
+  window.addEventListener('focus', () => {
+    if (!activeMediaPickerInput) return;
+    try {
+      const raw = localStorage.getItem('cms_media_picked');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const rawUrl = (parsed && typeof parsed.url === 'string') ? parsed.url.trim() : '';
+      const id = parsed ? parsed.id : 0;
+      const nextUrl = rawUrl !== '' ? rawUrl : mediaFileUrlFromId(id);
+      if (nextUrl !== '') applyPickedMedia(nextUrl);
+      localStorage.removeItem('cms_media_picked');
+    } catch (_e) {}
   });
 
   function valueOf(name) {
@@ -924,6 +1026,10 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
     let val = '';
     if (block.data && typeof block.data[key] === 'string') val = block.data[key];
     else if (defs[block.type] && defs[block.type].defaults && typeof defs[block.type].defaults[key] === 'string') val = defs[block.type].defaults[key];
+    if (key === 'image_url' && String(val).trim() === '' && block && block.data && block.data.media_id !== undefined) {
+      const fallbackUrl = mediaFileUrlFromId(block.data.media_id);
+      if (fallbackUrl !== '') val = fallbackUrl;
+    }
 
     let input;
 
@@ -992,6 +1098,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       const range = el('input', {class: 'pages-edit-range__slider', type: 'range', min: rangeMin, max: rangeMax, step: rangeStep});
       const number = el('input', {class: 'pages-edit-input pages-edit-range__number', type: 'number', min: rangeMin, max: rangeMax, step: rangeStep});
       const display = el('div', {class: 'pages-edit-field-hint pages-edit-range__value'});
+      const rangeUnit = key === 'height_vh' ? 'vh' : '%';
 
       const clampRangeValue = (raw) => {
         let n = Number.parseFloat(String(raw ?? '').trim());
@@ -1006,7 +1113,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       const initial = clampRangeValue(val);
       range.value = String(initial);
       number.value = String(initial);
-      display.textContent = `Aktuell: ${Math.round(initial)}%`;
+      display.textContent = `Aktuell: ${Math.round(initial)}${rangeUnit}`;
       range.disabled = !CAN_EDIT;
       number.readOnly = !CAN_EDIT;
 
@@ -1015,7 +1122,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
         const out = String(Math.round(n));
         range.value = out;
         number.value = out;
-        display.textContent = `Aktuell: ${out}%`;
+        display.textContent = `Aktuell: ${out}${rangeUnit}`;
         if (!CAN_EDIT) return;
         block.data[key] = out;
         serialize();
@@ -1054,6 +1161,235 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
     return wrapper;
   }
 
+  function renderHeroBlockFields(block) {
+    const fields = (defs.hero && defs.hero.fields && typeof defs.hero.fields === 'object') ? defs.hero.fields : {};
+    const wrapper = el('div', {class: 'pages-edit-hero-tabs'});
+    const preview = el('div', {class: 'pages-edit-hero-preview'});
+    const previewMedia = el('div', {class: 'pages-edit-hero-preview__media'});
+    const previewImage = el('img', {class: 'pages-edit-hero-preview__image', alt: ''});
+    const previewOverlay = el('div', {class: 'pages-edit-hero-preview__overlay'});
+    const previewBody = el('div', {class: 'pages-edit-hero-preview__body'});
+    const previewTitle = el('div', {class: 'pages-edit-hero-preview__title'});
+    const previewSubtitle = el('div', {class: 'pages-edit-hero-preview__subtitle'});
+    const previewButton = el('a', {class: 'pages-edit-hero-preview__button', href: '#', html: 'Button'});
+    const previewMeta = el('div', {class: 'pages-edit-hero-preview__meta'});
+    previewButton.setAttribute('tabindex', '-1');
+    previewBody.appendChild(previewTitle);
+    previewBody.appendChild(previewSubtitle);
+    previewBody.appendChild(previewButton);
+    previewMedia.appendChild(previewImage);
+    previewMedia.appendChild(previewOverlay);
+    previewMedia.appendChild(previewBody);
+    preview.appendChild(previewMedia);
+    preview.appendChild(previewMeta);
+
+    const tabBar = el('div', {class: 'pages-edit-hero-tabs__bar'});
+    const panelWrap = el('div', {class: 'pages-edit-hero-tabs__panels'});
+
+    const mediaKeys = ['image_url', 'media_id', 'focus_x', 'focus_y'];
+    const displayKeys = ['height_vh', 'overlay_opacity', 'image_fit', 'overlay', 'overlay_color'];
+    const contentKeys = ['headline', 'title', 'subtitle', 'text', 'button_text', 'button_label', 'button_url'];
+
+    const known = new Set([...mediaKeys, ...displayKeys, ...contentKeys]);
+    const remaining = Object.keys(fields).filter((k) => !known.has(k));
+    if (remaining.length > 0) {
+      displayKeys.push(...remaining);
+    }
+
+    const tabs = [
+      { id: 'media', label: 'Medien', keys: mediaKeys },
+      { id: 'display', label: 'Darstellung', keys: displayKeys },
+      { id: 'content', label: 'Inhalt', keys: contentKeys },
+    ];
+
+    const buttons = [];
+    const panels = [];
+    let mediaImageFieldWrap = null;
+    const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+    const valueFrom = (keys, fallback = '') => {
+      for (const key of keys) {
+        const raw = block && block.data ? block.data[key] : null;
+        if (raw === null || raw === undefined) continue;
+        const val = String(raw).trim();
+        if (val !== '') return val;
+      }
+      return fallback;
+    };
+    const previewTextFromHtml = (html) => {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html || '');
+      return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
+    };
+
+    const updateHeroPreview = () => {
+      try {
+      const imageUrl = valueFrom(['image_url'], mediaFileUrlFromId(valueFrom(['media_id'], '0')));
+      const mediaIdRaw = valueFrom(['media_id'], '0');
+      const title = valueFrom(['headline', 'title'], 'Hero Vorschau');
+      const subtitle = valueFrom(['subtitle'], '');
+      const textFallback = previewTextFromHtml(valueFrom(['text'], ''));
+      const buttonLabel = valueFrom(['button_text', 'button_label'], '');
+      const buttonUrl = valueFrom(['button_url'], '');
+      const heightRaw = valueFrom(['height_vh'], '55');
+      const overlayRaw = valueFrom(['overlay_opacity'], '35');
+
+      let heightVh = Number.parseFloat(heightRaw);
+      if (!Number.isFinite(heightVh)) heightVh = 55;
+      heightVh = clamp(heightVh, 25, 95);
+
+      let overlayPct = Number.parseFloat(overlayRaw);
+      if (!Number.isFinite(overlayPct)) overlayPct = 35;
+      // Editor-Vorschau: nie komplett schwarz darstellen, auch wenn Frontend-Overlay sehr hoch ist.
+      overlayPct = clamp(overlayPct, 0, 70);
+
+      preview.style.setProperty('--hero-preview-height', `${heightVh}vh`);
+      previewOverlay.style.opacity = String(overlayPct / 100);
+
+      const src = resolvePreviewImageSource(imageUrl, mediaIdRaw);
+      if (src.primary !== '') {
+        if (src.fallback !== '') {
+          previewImage.onerror = () => {
+            if (previewImage.dataset.fallbackApplied === '1') return;
+            previewImage.dataset.fallbackApplied = '1';
+            previewImage.src = src.fallback;
+            previewMeta.textContent = `Vorschau (Fallback): ${src.fallback}`;
+          };
+          previewImage.dataset.fallbackApplied = '0';
+        } else {
+          previewImage.onerror = null;
+          previewImage.dataset.fallbackApplied = '0';
+        }
+        previewImage.onload = () => {
+          previewMeta.textContent = `Vorschau: ${previewImage.currentSrc || src.primary}`;
+        };
+        previewImage.src = src.primary;
+        previewImage.style.display = 'block';
+        preview.classList.remove('is-empty');
+        previewMeta.textContent = `Bildquelle: ${src.primary} · Overlay: ${Math.round(overlayPct)}%`;
+      } else {
+        previewImage.onerror = null;
+        previewImage.onload = null;
+        previewImage.removeAttribute('src');
+        previewImage.style.display = 'none';
+        preview.classList.add('is-empty');
+        previewMeta.textContent = 'Kein Bild ausgewählt.';
+      }
+
+      previewTitle.textContent = title;
+      previewSubtitle.textContent = subtitle !== '' ? subtitle : textFallback.slice(0, 140);
+      previewSubtitle.style.display = previewSubtitle.textContent ? '' : 'none';
+
+      if (buttonLabel !== '') {
+        previewButton.textContent = buttonLabel;
+        previewButton.setAttribute('href', buttonUrl !== '' ? buttonUrl : '#');
+        previewButton.style.display = '';
+      } else {
+        previewButton.style.display = 'none';
+      }
+      } catch (e) {
+        console.error('Hero preview update failed:', e);
+      }
+    };
+
+    const activateTab = (id) => {
+      buttons.forEach((btn) => {
+        const active = btn.dataset.tab === id;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach((panel) => {
+        const show = panel.dataset.tab === id;
+        panel.classList.toggle('is-active', show);
+        panel.hidden = !show;
+      });
+    };
+
+    tabs.forEach((tab) => {
+      const btn = el('button', {
+        type: 'button',
+        class: 'pages-edit-hero-tabbtn',
+        html: tab.label,
+      });
+      btn.dataset.tab = tab.id;
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', 'false');
+      btn.addEventListener('click', () => activateTab(tab.id));
+      buttons.push(btn);
+      tabBar.appendChild(btn);
+
+      const panel = el('section', {class: 'pages-edit-hero-tabpanel'});
+      panel.dataset.tab = tab.id;
+      panel.setAttribute('role', 'tabpanel');
+      panel.hidden = true;
+
+      const panelFields = el('div', {class: 'pages-edit-fields'});
+      tab.keys.forEach((key) => {
+        if (!fields[key]) return;
+        try {
+          const fieldNode = renderField(block, key, fields[key]);
+          panelFields.appendChild(fieldNode);
+          if (tab.id === 'media' && key === 'image_url') {
+            mediaImageFieldWrap = fieldNode;
+          }
+        } catch (e) {
+          console.error('Hero field render failed:', key, e);
+        }
+      });
+
+      if (!panelFields.children.length) {
+        panelFields.appendChild(el('div', {
+          class: 'pages-edit-field-hint',
+          html: 'Für diesen Bereich sind aktuell keine Felder konfiguriert.'
+        }));
+      }
+
+      panel.appendChild(panelFields);
+      panels.push(panel);
+      panelWrap.appendChild(panel);
+    });
+
+    wrapper.appendChild(tabBar);
+    wrapper.appendChild(panelWrap);
+    activateTab('media');
+    updateHeroPreview();
+    wrapper.addEventListener('input', updateHeroPreview);
+    wrapper.addEventListener('change', updateHeroPreview);
+    if (mediaImageFieldWrap) {
+      preview.style.display = 'block';
+      mediaImageFieldWrap.appendChild(preview);
+    } else {
+      const mediaPanel = panels.find((p) => p && p.dataset && p.dataset.tab === 'media');
+      if (mediaPanel) mediaPanel.insertBefore(preview, mediaPanel.firstChild || null);
+    }
+    return wrapper;
+  }
+
+  function openBlockEditor(block) {
+    if (!blockModal || !blockModalFields) return;
+    closeAllModals();
+    if (blockModalTitle) {
+      blockModalTitle.textContent = `${blockLabel(block.type)} bearbeiten`;
+    }
+    if (blockModalSub) {
+      blockModalSub.textContent = block.type === 'hero'
+        ? 'Hero-Block: Fokus auf Titelbild, Typografie und Einstieg'
+        : `Typ: ${block.type}`;
+    }
+    blockModalFields.innerHTML = '';
+    try {
+      blockModalFields.appendChild(block.type === 'hero' ? renderHeroBlockFields(block) : renderBlockFields(block));
+    } catch (err) {
+      console.error('Block-Editor konnte nicht vollständig geladen werden:', err);
+      blockModalFields.innerHTML = '';
+      blockModalFields.appendChild(renderBlockFields(block));
+    }
+    blockModal.classList.add('is-open');
+    if (modalBackdrop) {
+      modalBackdrop.hidden = false;
+      modalBackdrop.classList.add('is-open');
+    }
+  }
+
   function render() {
     container.innerHTML = '';
 
@@ -1065,35 +1401,26 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
 
     model.blocks.forEach((block, idx) => {
       const head = el('div', {class: 'pages-edit-card-head'});
-      const isCollapsed = collapsedBlocks.has(block.id);
 
       const left = el('div', {class: 'pages-edit-blockhead-left'});
       left.appendChild(el('span', {class: 'pages-edit-drag-handle', html: '⋮⋮'}));
       const displayLabel = blockLabel(block.type);
-      left.appendChild(el('strong', {html: displayLabel}));
+      left.appendChild(el('strong', {class: 'pages-edit-blockhead-title', html: displayLabel}));
       left.appendChild(el('span', {class: 'pages-edit-blockhead-meta', html: `(${block.type})`}));
 
       const right = el('div', {class: 'pages-edit-blockhead-actions'});
-      const toggleBtn = el('button', {type:'button', class:'btn btn--ghost btn--sm', html: isCollapsed ? 'Ausklappen' : 'Einklappen'});
-      toggleBtn.addEventListener('click', (ev) => {
+      const editBtn = el('button', {type:'button', class:'btn btn--ghost btn--sm pages-edit-blockbtn pages-edit-blockbtn--toggle', html: 'Bearbeiten'});
+      editBtn.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        if (collapsedBlocks.has(block.id)) {
-          collapsedBlocks.delete(block.id);
-          model.blocks.forEach((b) => {
-            if (b.id !== block.id) collapsedBlocks.add(b.id);
-          });
-        } else {
-          collapsedBlocks.add(block.id);
-        }
-        render();
+        openBlockEditor(block);
       });
-      right.appendChild(toggleBtn);
+      right.appendChild(editBtn);
 
       if (CAN_EDIT) {
-        const upBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm', html:'↑'});
-        const dnBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm', html:'↓'});
-        const delBtn = el('button', {type:'button', class:'btn btn--ghost btn--danger btn--sm', html:'Löschen'});
+        const upBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm pages-edit-blockbtn', html:'↑'});
+        const dnBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm pages-edit-blockbtn', html:'↓'});
+        const delBtn = el('button', {type:'button', class:'btn btn--ghost btn--danger btn--sm pages-edit-blockbtn pages-edit-blockbtn--delete', html:'Löschen'});
 
         upBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
@@ -1121,7 +1448,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
           ev.preventDefault();
           ev.stopPropagation();
           model.blocks.splice(idx, 1);
-          collapsedBlocks.delete(block.id);
+          closeAllModals();
           render();
           serialize();
         });
@@ -1137,11 +1464,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       head.appendChild(right);
 
       const card = el('div', {class: 'pages-edit-card pages-edit-blockcard', 'data-block-id': block.id});
-      if (isCollapsed) card.classList.add('is-collapsed');
       card.appendChild(head);
-      const body = renderBlockFields(block);
-      body.classList.add('pages-edit-blockbody');
-      card.appendChild(body);
 
       container.appendChild(card);
     });
@@ -1162,10 +1485,6 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
         type,
         data: Object.assign({}, defaults)
       });
-      model.blocks.forEach((b) => {
-        if (b.id !== model.blocks[model.blocks.length - 1].id) collapsedBlocks.add(b.id);
-      });
-      collapsedBlocks.delete(model.blocks[model.blocks.length - 1].id);
 
       render();
       serialize(true);

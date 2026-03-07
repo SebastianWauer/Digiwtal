@@ -785,6 +785,13 @@ document.addEventListener('click', function(e){
   const url = String(btn.getAttribute('data-pick-url') || '').trim();
   if (id <= 0) return;
   if (!url) return;
+  try {
+    localStorage.setItem('cms_media_picked', JSON.stringify({
+      id: id,
+      url: url,
+      ts: Date.now()
+    }));
+  } catch (_) {}
 
   if (window.opener && !window.opener.closed) {
     window.opener.postMessage({ type: 'media_picked', url: url }, '*');

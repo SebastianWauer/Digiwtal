@@ -370,6 +370,32 @@
   margin-bottom: 12px;
 }
 
+.pages-edit-builder{
+  border-top: 1px solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  padding-top: 14px;
+}
+
+.pages-edit-builder .pages-edit-pb-actions{
+  position: sticky;
+  top: 78px;
+  z-index: 9;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.pages-edit-builder .pages-edit-pb-actions .btn{
+  border-radius: 999px;
+  padding-inline: 12px;
+  font-weight: 700;
+}
+
+.pages-edit-blocks{
+  margin-top: 10px;
+}
+
 .pages-edit-pb-readonly{
   margin-bottom: 12px;
 }
@@ -391,6 +417,11 @@
 /* Block-Karten im Builder */
 .pages-edit-blockcard{
   margin-top: 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 80%, transparent);
+  background: color-mix(in srgb, var(--panel) 58%, var(--card) 42%);
+  box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  padding: 12px 14px;
 }
 
 .pages-edit-blockcard.is-collapsed .pages-edit-card-head{
@@ -402,23 +433,32 @@
 }
 
 .pages-edit-blockbody{
-  padding-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--card-border) 72%, transparent);
 }
 
 /* Block Header: linker Teil (Label + Meta) */
 .pages-edit-blockhead-left{
   display: inline-flex;
-  gap: 8px;
+  gap: 10px;
   align-items: baseline;
   flex-wrap: wrap;
+}
+
+.pages-edit-blockhead-title{
+  font-weight: 760;
+  letter-spacing: .01em;
 }
 
 .pages-edit-drag-handle{
   cursor: grab;
   user-select: none;
-  font-size: 14px;
-  opacity: .72;
-  letter-spacing: -1px;
+  font-size: 12px;
+  opacity: .6;
+  letter-spacing: -0.5px;
+  border: 1px dashed color-mix(in srgb, var(--btn-border) 75%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 
 .pages-edit-drag-handle:active{
@@ -426,9 +466,11 @@
 }
 
 .pages-edit-blockhead-meta{
-  opacity: .7;
+  opacity: .58;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
 }
 
 /* Block Header: Buttons rechts */
@@ -437,6 +479,19 @@
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.pages-edit-blockbtn{
+  min-width: 34px;
+  border-radius: 999px;
+}
+
+.pages-edit-blockbtn--toggle{
+  padding-inline: 12px;
+}
+
+.pages-edit-blockbtn--delete{
+  font-weight: 700;
 }
 
 .pages-edit-preview-frame{
@@ -448,10 +503,10 @@
 }
 
 .pages-edit-richtext{
-  border: 1px solid var(--btn-border);
+  border: 1px solid color-mix(in srgb, var(--btn-border) 80%, transparent);
   border-radius: 12px;
   overflow: hidden;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 68%, var(--card) 32%);
 }
 
 .pages-edit-richtext__toolbar{
@@ -459,8 +514,8 @@
   flex-wrap: wrap;
   gap: 6px;
   padding: 8px;
-  border-bottom: 1px solid var(--card-border);
-  background: color-mix(in srgb, var(--panel) 86%, #000 14%);
+  border-bottom: 1px solid color-mix(in srgb, var(--card-border) 80%, transparent);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
 }
 
 .pages-edit-rt-group{
@@ -481,9 +536,9 @@
 .pages-edit-rt-btn{
   min-width: 30px;
   height: 30px;
-  border: 1px solid var(--btn-border);
+  border: 1px solid color-mix(in srgb, var(--btn-border) 88%, transparent);
   border-radius: 8px;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
   color: var(--text);
   cursor: pointer;
   font-size: 12px;
@@ -492,7 +547,8 @@
 }
 
 .pages-edit-rt-btn:hover{
-  border-color: var(--outline);
+  border-color: color-mix(in srgb, var(--outline) 62%, transparent);
+  background: color-mix(in srgb, var(--panel) 76%, var(--card) 24%);
 }
 
 .pages-edit-rt-btn.is-strong{font-weight: 800;}
@@ -518,13 +574,31 @@
 
 .pages-edit-richtext__surface{
   min-height: 220px;
-  padding: 12px;
+  padding: 14px;
   outline: none;
-  line-height: 1.55;
+  line-height: 1.62;
+  font-size: 15px;
 }
 
 .pages-edit-richtext__surface:focus{
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--outline) 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--outline) 42%, transparent);
+}
+
+.pages-edit-richtext__surface p{
+  margin: 0 0 .72rem;
+}
+
+.pages-edit-richtext__surface h2,
+.pages-edit-richtext__surface h3{
+  margin: 0.4rem 0 .45rem;
+  line-height: 1.25;
+}
+
+.pages-edit-richtext__surface blockquote{
+  margin: .4rem 0 .85rem;
+  padding: .45rem .75rem;
+  border-left: 2px solid color-mix(in srgb, var(--btn-border) 90%, transparent);
+  color: color-mix(in srgb, var(--text) 80%, var(--muted) 20%);
 }
 
 .pages-edit-richtext__html{
@@ -550,8 +624,8 @@
   position: fixed;
   inset: 0;
   z-index: 45;
-  background: rgba(8,12,20,.56);
-  backdrop-filter: blur(2px);
+  background: rgba(8,12,20,.72);
+  backdrop-filter: none;
 }
 
 .pages-edit-modal-backdrop.is-open{
@@ -568,11 +642,229 @@
   width: min(900px, calc(100% - 28px));
   max-height: calc(100vh - 60px);
   overflow: auto;
-  box-shadow: 0 18px 44px rgba(0,0,0,.35);
+  box-shadow: 0 22px 52px rgba(0,0,0,.48);
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--card-border) 92%, transparent);
+  opacity: 1;
+}
+
+html[data-theme="dark"] .pages-edit-modal{
+  background: #16181d;
+  border-color: rgba(255,255,255,0.12);
+}
+
+html[data-theme="dark"] .pages-edit-modal .pages-edit-input,
+html[data-theme="dark"] .pages-edit-modal .pages-edit-textarea,
+html[data-theme="dark"] .pages-edit-modal .pages-edit-richtext{
+  background: #101216;
 }
 
 .pages-edit-modal.is-open{
   display: block;
+}
+
+.pages-edit-modal--block{
+  width: min(980px, calc(100% - 28px));
+  height: min(82vh, 860px);
+}
+
+.pages-edit-modal--block.is-open{
+  display: flex;
+  flex-direction: column;
+}
+
+.pages-edit-modal--block .pages-edit-card-head{
+  margin-bottom: 2px;
+  padding-right: 26px;
+}
+
+.pages-edit-modal--block #modal-block-fields{
+  margin-top: 10px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pages-edit-hero-tabs{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.pages-edit-hero-preview{
+  --hero-preview-height: 55vh;
+  display: block !important;
+}
+
+.pages-edit-hero-tabpanel[data-tab="media"] .pages-edit-hero-preview{
+  margin-top: 10px;
+}
+
+.pages-edit-hero-preview__media{
+  position: relative;
+  min-height: 220px;
+  height: min(var(--hero-preview-height), 360px);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  background: linear-gradient(140deg, #232832, #12151b);
+  background-size: cover;
+  background-position: center;
+}
+
+.pages-edit-hero-preview__image{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: none;
+}
+
+.pages-edit-hero-preview.is-empty .pages-edit-hero-preview__media::before{
+  content: 'Noch kein Hero-Bild ausgewählt';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pages-edit-hero-preview__overlay{
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: .35;
+  pointer-events: none;
+}
+
+.pages-edit-hero-preview__body{
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  z-index: 1;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pages-edit-hero-preview__title{
+  font-size: clamp(20px, 2.5vw, 30px);
+  font-weight: 800;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.pages-edit-hero-preview__subtitle{
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 72ch;
+  color: rgba(255,255,255,.9);
+}
+
+.pages-edit-hero-preview__button{
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.44);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  pointer-events: none;
+}
+
+.pages-edit-hero-preview__meta{
+  margin-top: 8px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--text) 70%, var(--muted) 30%);
+  word-break: break-all;
+}
+
+.pages-edit-hero-tabs__bar{
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  width: fit-content;
+}
+
+.pages-edit-hero-tabbtn{
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.pages-edit-hero-tabbtn.is-active{
+  background: color-mix(in srgb, var(--outline) 22%, transparent);
+  color: var(--text);
+}
+
+.pages-edit-hero-tabs__panels{
+  border: 1px solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 72%, var(--card) 28%);
+  padding: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.pages-edit-hero-tabpanel{
+  display: none;
+}
+
+.pages-edit-hero-tabpanel.is-active{
+  display: block;
+}
+
+.pages-edit-hero-tabpanel .pages-edit-fields{
+  gap: 10px;
+}
+
+.pages-edit-hero-tabpanel .pages-edit-field-hint{
+  margin-bottom: 0;
+}
+
+.pages-edit-hero-tabpanel .pages-edit-range{
+  grid-template-columns: 1fr 84px;
+}
+
+html[data-theme="dark"] .pages-edit-hero-tabs__bar{
+  background: #0f131a;
+  border-color: rgba(255,255,255,.12);
+}
+
+html[data-theme="dark"] .pages-edit-hero-preview__media{
+  border-color: rgba(255,255,255,.14);
+  background: linear-gradient(140deg, #1b2028, #0d1015);
+}
+
+html[data-theme="dark"] .pages-edit-hero-tabs__panels{
+  background: #0f131a;
+  border-color: rgba(255,255,255,.12);
+}
+
+html[data-theme="dark"] .pages-edit-hero-tabpanel .pages-edit-input,
+html[data-theme="dark"] .pages-edit-hero-tabpanel .pages-edit-textarea{
+  background: #0b0f15;
 }
 
 .pages-edit-modal__close{
@@ -613,6 +905,16 @@
   .pages-edit-modal{
     width: calc(100% - 16px);
     max-height: calc(100vh - 16px);
+  }
+  .pages-edit-modal--block{
+    height: calc(100vh - 16px);
+  }
+  .pages-edit-hero-tabs__bar{
+    width: 100%;
+    justify-content: space-between;
+  }
+  .pages-edit-hero-preview__media{
+    height: min(var(--hero-preview-height), 300px);
   }
   .pages-edit-left,
   .pages-edit-right{
