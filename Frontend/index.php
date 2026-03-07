@@ -447,6 +447,10 @@ if (!preg_match('/^[a-z0-9\/-]+$/', $slug)) {
 try {
     $settings = $client->getPublicSettings();
     $siteName = (string)($settings['site_name'] ?? 'Website');
+    $faviconUrl = null;
+    if (isset($settings['favicon_url']) && is_string($settings['favicon_url']) && $settings['favicon_url'] !== '') {
+        $faviconUrl = absolutizeCmsMediaUrl($settings['favicon_url'], deriveCmsBaseUrlFromApiBase($baseUrl));
+    }
 } catch (CmsApiException $e) {
     frontendDebugLog('[FRONTEND] settings/public failed'
         . ' base_url=' . $baseUrl
@@ -506,7 +510,7 @@ $blocks = enrichBlockFocusWithMedia($blocks, $client, $cmsBaseUrl);
 $seo = is_array($page['seo'] ?? null) ? $page['seo'] : [];
 
 try {
-    render('templates/layout.php', compact('siteName', 'title', 'pageTitle', 'blocks', 'navItems', 'slug', 'seo'));
+    render('templates/layout.php', compact('siteName', 'title', 'pageTitle', 'blocks', 'navItems', 'slug', 'seo', 'faviconUrl'));
 } catch (Throwable) {
     render500($siteName);
 }

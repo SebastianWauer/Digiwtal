@@ -14,6 +14,7 @@
   $ogTitle    = (string)($seo['og_title']         ?? '') ?: $metaTitle;
   $ogDesc     = (string)($seo['og_description']   ?? '') ?: $metaDesc;
   $ogImage    = (string)($seo['og_image_url']     ?? '');
+  $faviconUrl = isset($faviconUrl) ? trim((string)$faviconUrl) : '';
 
   // Nav-Helpers
   $navHref  = fn(array $item): string => !empty($item['is_home']) ? '/' : (string)($item['slug'] ?? '/');
@@ -52,6 +53,10 @@
 
   <?php if ($ogImage !== ''): ?>
   <meta property="og:image" content="<?= $e($ogImage) ?>">
+  <?php endif; ?>
+
+  <?php if ($faviconUrl !== ''): ?>
+  <link rel="icon" href="<?= $e($faviconUrl) ?>">
   <?php endif; ?>
 
   <link rel="stylesheet" href="/assets/css/theme.css">

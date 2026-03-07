@@ -57,6 +57,9 @@ final class ThemeEngine
         $navHeader = $repo->listPublicNav('header');
         $navFooter = $repo->listPublicNav('footer');
         $nav = ['header' => $navHeader, 'footer' => $navFooter];
+        $settings = (new SiteSettingsRepositoryDb($pdo))->getAll();
+        $faviconMediaId = (int)($settings['favicon_media_id'] ?? 0);
+        $faviconUrl = $faviconMediaId > 0 ? ('/media/file?id=' . $faviconMediaId) : '';
 
         $renderer  = new BlockRenderer();
         $themeRoot = dirname(__DIR__, 3) . '/Frontend/themes/default';

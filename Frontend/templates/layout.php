@@ -6,9 +6,13 @@
     <?php
     $brandVersion = @filemtime(__DIR__ . '/../assets/css/brand.php') ?: time();
     $themeVersion = @filemtime(__DIR__ . '/../assets/css/theme.css') ?: time();
+    $faviconUrl = (isset($faviconUrl) && is_string($faviconUrl)) ? trim($faviconUrl) : '';
     ?>
     <link rel="stylesheet" href="/assets/css/brand.php?v=<?= (int)$brandVersion ?>">
     <link rel="stylesheet" href="/assets/css/theme.css?v=<?= (int)$themeVersion ?>">
+    <?php if ($faviconUrl !== ''): ?>
+    <link rel="icon" href="<?= htmlspecialchars($faviconUrl, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
     <style>
       /* Safety override: honor per-block hero overlay even with cached/legacy theme.css */
       .block-hero[style*="background-image"]::before {

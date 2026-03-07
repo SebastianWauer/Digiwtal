@@ -12,7 +12,7 @@ final class PasswordResetController
     {
         $path = parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
         if (!is_string($path)) return '';
-        if (preg_match('#^/password-reset/([a-f0-9]{64})$#', rtrim($path, '/'), $m)) {
+        if (preg_match('#^/password-reset/([A-Fa-f0-9]{64})$#', rtrim($path, '/'), $m)) {
             return (string)$m[1];
         }
         return '';
@@ -177,15 +177,15 @@ final class PasswordResetController
         $to = trim($to);
         if ($to === '') return;
 
-        $base = trim((string)Env::get('APP_URL', ''));
+        $base = $this->detectRequestBaseUrl();
         if ($base === '') {
-            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-            $base = $scheme . '://' . $host;
+            $base = rtrim(trim((string)Env::get('APP_URL', '')), '/');
         }
-        $base = rtrim($base, '/');
+        if ($base === '') {
+            $base = 'http://localhost';
+        }
 
-        $link = $base . '/password-reset/' . $token;
+        $link = $base . '/password-reset/' . strtolower($token);
         $subject = 'Passwort zurücksetzen';
         $body = "Hallo,\n\nfür dein CMS-Konto wurde ein Passwort-Reset angefordert.\n\n";
         $body .= "Link (gültig 1 Stunde):\n" . $link . "\n\n";
@@ -199,5 +199,29 @@ final class PasswordResetController
         ];
 
         @mail($to, $subject, $body, implode("\r\n", $headers));
+    }
+
+    private function detectRequestBaseUrl(): string
+    {
+        $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host === '') {
+            return '';
+        }
+
+        $https = (string)($_SERVER['HTTPS'] ?? '');
+        $forwardedProto = strtolower(trim((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')));
+        $scheme = ($forwardedProto === 'https' || ($forwardedProto === '' && $https !== '' && $https !== 'off')) ? 'https' : 'http';
+
+        $uriPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+        $path = is_string($uriPath) ? $uriPath : '/';
+        $path = '/' . ltrim($path, '/');
+
+        $prefix = '';
+        $markerPos = strpos($path, '/password-reset');
+        if ($markerPos !== false) {
+            $prefix = rtrim(substr($path, 0, $markerPos), '/');
+        }
+
+        return $scheme . '://' . $host . $prefix;
     }
 }

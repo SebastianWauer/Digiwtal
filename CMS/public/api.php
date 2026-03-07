@@ -125,7 +125,7 @@ function validate_hex_color(string $color, string $default): string
  */
 function get_public_settings(PDO $pdo): array
 {
-    $keys = ['site_title', 'brand_color_primary', 'brand_color_secondary', 'brand_color_tertiary', 'logo_url'];
+    $keys = ['site_title', 'brand_color_primary', 'brand_color_secondary', 'brand_color_tertiary', 'logo_url', 'favicon_media_id'];
     $in   = implode(', ', array_fill(0, count($keys), '?'));
     $stmt = $pdo->prepare("SELECT `key`, `value` FROM site_settings WHERE `key` IN ({$in})");
     $stmt->execute($keys);
@@ -136,12 +136,16 @@ function get_public_settings(PDO $pdo): array
         $raw[(string)($r['key'] ?? '')] = (string)($r['value'] ?? '');
     }
 
+    $faviconId = (int)($raw['favicon_media_id'] ?? 0);
+    $faviconUrl = $faviconId > 0 ? ('/media/file?id=' . $faviconId) : null;
+
     return [
         'site_name'             => (string)($raw['site_title'] ?? ''),
         'brand_color_primary'   => validate_hex_color($raw['brand_color_primary']   ?? '', '#2563eb'),
         'brand_color_secondary' => validate_hex_color($raw['brand_color_secondary'] ?? '', '#64748b'),
         'brand_color_tertiary'  => validate_hex_color($raw['brand_color_tertiary']  ?? '', '#f59e0b'),
         'logo_url'              => (isset($raw['logo_url']) && $raw['logo_url'] !== '') ? $raw['logo_url'] : null,
+        'favicon_url'           => $faviconUrl,
     ];
 }
 

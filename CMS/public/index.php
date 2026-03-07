@@ -39,8 +39,8 @@ $router->get('/login', \App\Controller\LoginController::class, 'show');
 $router->post('/login', \App\Controller\LoginController::class, 'submit');
 $router->get('/password-reset', \App\Controller\PasswordResetController::class, 'showRequest');
 $router->post('/password-reset', \App\Controller\PasswordResetController::class, 'submitRequest');
-$router->get('/password-reset/{token:[a-f0-9]{64}}', \App\Controller\PasswordResetController::class, 'showResetForm');
-$router->post('/password-reset/{token:[a-f0-9]{64}}', \App\Controller\PasswordResetController::class, 'submitResetForm');
+$router->get('/password-reset/{token:[A-Fa-f0-9]+}', \App\Controller\PasswordResetController::class, 'showResetForm');
+$router->post('/password-reset/{token:[A-Fa-f0-9]+}', \App\Controller\PasswordResetController::class, 'submitResetForm');
 
 $router->post('/logout', \App\Controller\LogoutController::class, 'handle');
 
