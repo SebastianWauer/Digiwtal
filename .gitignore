@@ -6,6 +6,8 @@ __MACOSX/
 # IDE / editor
 .idea/
 .vscode/
+.claude/
+**/.claude/
 *.swp
 
 # Secrets
