@@ -3,8 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/assets/css/brand.php">
-    <link rel="stylesheet" href="/assets/css/theme.css">
+    <?php
+    $brandVersion = @filemtime(__DIR__ . '/../assets/css/brand.php') ?: time();
+    $themeVersion = @filemtime(__DIR__ . '/../assets/css/theme.css') ?: time();
+    ?>
+    <link rel="stylesheet" href="/assets/css/brand.php?v=<?= (int)$brandVersion ?>">
+    <link rel="stylesheet" href="/assets/css/theme.css?v=<?= (int)$themeVersion ?>">
+    <style>
+      /* Safety override: honor per-block hero overlay even with cached/legacy theme.css */
+      .block-hero[style*="background-image"]::before {
+        background: rgba(0, 0, 0, var(--hero-overlay-opacity, 0)) !important;
+      }
+    </style>
     <title><?php echo e($title ?? 'Seite'); ?></title>
     <?php
     $seo = is_array($seo ?? null) ? $seo : [];

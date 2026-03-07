@@ -40,6 +40,7 @@ $folderName = $folderNameById[$fid] ?? 'root';
 $sizeKb = $size > 0 ? round($size / 1024, 1) : 0;
 $w = (int)($row['width'] ?? 0);
 $h = (int)($row['height'] ?? 0);
+$canRotate = $canEdit && in_array(strtolower($ext), ['jpg', 'jpeg', 'png', 'webp'], true);
 
 $usages = $usages ?? [];
 ?>
@@ -51,7 +52,8 @@ $usages = $usages ?? [];
     <!-- LEFT: Preview + Info -->
     <aside class="media-edit__left card">
       <div class="media-edit__preview">
-        <img src="/media/file?id=<?= (int)$id ?>" alt="">
+        <img src="/media/file?id=<?= (int)$id ?>" alt="" id="mediaFocusPreviewImage">
+        <span class="media-edit__focus-dot" id="mediaFocusDot" aria-hidden="true"></span>
       </div>
 
       <div class="media-edit__meta">
@@ -68,6 +70,20 @@ $usages = $usages ?? [];
       <div class="media-edit__actions">
         <a class="btn btn--ghost btn--sm" href="/media?folder=<?= (int)$fid ?>">Zurück zur Medienübersicht</a>
         <a class="btn btn--ghost btn--sm" href="/media/file?id=<?= (int)$id ?>" target="_blank" rel="noopener">Datei öffnen</a>
+        <?php if ($canRotate): ?>
+          <form method="post" action="/media/rotate" class="media-edit__inline-form">
+            <?= admin_csrf_field() ?>
+            <input type="hidden" name="id" value="<?= (int)$id ?>">
+            <input type="hidden" name="direction" value="ccw">
+            <button type="submit" class="btn btn--ghost btn--sm" title="90° gegen den Uhrzeigersinn">↺ 90°</button>
+          </form>
+          <form method="post" action="/media/rotate" class="media-edit__inline-form">
+            <?= admin_csrf_field() ?>
+            <input type="hidden" name="id" value="<?= (int)$id ?>">
+            <input type="hidden" name="direction" value="cw">
+            <button type="submit" class="btn btn--ghost btn--sm" title="90° im Uhrzeigersinn">↻ 90°</button>
+          </form>
+        <?php endif; ?>
       </div>
     </aside>
 
@@ -154,7 +170,7 @@ $usages = $usages ?? [];
         </div>
 
         <div class="field">
-          <div class="label">Fokuspunkt (für Zuschnitte, 0–100%)</div>
+          <div class="label">Fokuspunkt (für Zuschnitte, -1 bis 1)</div>
           <div class="focus-grid">
             <div>
               <label class="sublabel" for="focus_x">X (%)</label>
@@ -163,8 +179,9 @@ $usages = $usages ?? [];
                 type="number"
                 id="focus_x"
                 name="focus_x"
-                min="0"
-                max="100"
+                min="-1"
+                max="1"
+                step="0.0001"
                 value="<?= h($fx) ?>"
                 <?= $canEdit ? '' : 'disabled' ?>
               >
@@ -176,14 +193,15 @@ $usages = $usages ?? [];
                 type="number"
                 id="focus_y"
                 name="focus_y"
-                min="0"
-                max="100"
+                min="-1"
+                max="1"
+                step="0.0001"
                 value="<?= h($fy) ?>"
                 <?= $canEdit ? '' : 'disabled' ?>
               >
             </div>
           </div>
-          <div class="hint">Wird später genutzt, um bei automatischen Zuschnitten die „wichtige Stelle“ zu fokussieren.</div>
+          <div class="hint">Klicke ins Bild, um den Fokuspunkt zu setzen. Wertebereich: -1 (links/oben) bis 1 (rechts/unten).</div>
         </div>
 
         <div class="form-actions">
@@ -231,3 +249,74 @@ $usages = $usages ?? [];
     </section>
   </div>
 </div>
+
+<?php if ($canEdit): ?>
+<script>
+(() => {
+  const img = document.getElementById('mediaFocusPreviewImage');
+  const dot = document.getElementById('mediaFocusDot');
+  const inputX = document.getElementById('focus_x');
+  const inputY = document.getElementById('focus_y');
+  if (!img || !dot || !inputX || !inputY) return;
+
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function setDotFromValues() {
+    const x = Number(inputX.value);
+    const y = Number(inputY.value);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      dot.style.display = 'none';
+      return;
+    }
+    const px = ((clamp(x, -1, 1) + 1) / 2) * 100;
+    const py = ((clamp(y, -1, 1) + 1) / 2) * 100;
+    dot.style.left = px + '%';
+    dot.style.top = py + '%';
+    dot.style.display = 'block';
+  }
+
+  function renderedImageBox() {
+    const rect = img.getBoundingClientRect();
+    const nw = img.naturalWidth || 0;
+    const nh = img.naturalHeight || 0;
+    if (nw <= 0 || nh <= 0 || rect.width <= 0 || rect.height <= 0) {
+      return null;
+    }
+
+    const scale = Math.min(rect.width / nw, rect.height / nh);
+    const w = nw * scale;
+    const h = nh * scale;
+    const x = rect.left + (rect.width - w) / 2;
+    const y = rect.top + (rect.height - h) / 2;
+    return { x, y, w, h };
+  }
+
+  img.addEventListener('click', (ev) => {
+    const box = renderedImageBox();
+    if (!box) return;
+
+    const relX = (ev.clientX - box.x) / box.w;
+    const relY = (ev.clientY - box.y) / box.h;
+
+    if (relX < 0 || relX > 1 || relY < 0 || relY > 1) {
+      return;
+    }
+
+    const fx = (relX * 2) - 1;
+    const fy = (relY * 2) - 1;
+
+    inputX.value = fx.toFixed(4);
+    inputY.value = fy.toFixed(4);
+    setDotFromValues();
+  });
+
+  inputX.addEventListener('input', setDotFromValues);
+  inputY.addEventListener('input', setDotFromValues);
+  img.addEventListener('load', setDotFromValues);
+
+  setDotFromValues();
+})();
+</script>
+<?php endif; ?>

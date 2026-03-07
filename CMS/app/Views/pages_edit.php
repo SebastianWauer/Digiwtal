@@ -6,6 +6,7 @@ declare(strict_types=1);
 /** @var array $seoOverride */
 /** @var array $revisions */
 /** @var ?array $selectedRevision */
+/** @var array $navCandidates */
 
 use App\PageBuilder\BlockRegistry;
 
@@ -22,16 +23,15 @@ $navVisible = !empty($page['nav_visible']);
 $navLabel   = (string)($page['nav_label'] ?? '');
 $navArea    = (string)($page['nav_area'] ?? 'header');
 $navOrder   = (int)($page['nav_order'] ?? 0);
+$navPlaceMode = (string)($page['_nav_place_mode'] ?? 'after');
+if (!in_array($navPlaceMode, ['before', 'after'], true)) $navPlaceMode = 'after';
+$navPlaceRef = (int)($page['_nav_place_ref'] ?? 0);
 
 // Meta (008_pages_meta.sql)
 $frontendTitle = (string)($page['frontend_title'] ?? '');
 $subtitle      = (string)($page['subtitle'] ?? '');
 $status        = (string)($page['status'] ?? 'live');
 if (!in_array($status, ['live','draft'], true)) $status = 'live';
-
-// kleine Anzeige-URL (nur UI, nicht speichern)
-$prettySlug = $slug !== '' ? $slug : '— automatisch aus Titel —';
-if ($prettySlug !== '— automatisch aus Titel —' && $prettySlug[0] !== '/') $prettySlug = '/' . $prettySlug;
 
 // Permissions (UI-only)
 $canCreate     = function_exists('admin_can') && admin_can('pages.create');
@@ -69,10 +69,11 @@ $seoOgDesc       = (string)($seoOverride['og_description']   ?? '');
 $seoOgImage      = (string)($seoOverride['og_image_url']     ?? '');
 $revisions       = is_array($revisions ?? null) ? $revisions : [];
 $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : null;
+$navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
 ?>
 <form method="post" action="/pages/save" class="pages-edit-form" id="pageEditForm">
   <?= admin_csrf_field() ?>
-  <input type="hidden" name="id" value="<?= (int)$id ?>">
+  <input type="hidden" name="id" id="pageIdInput" value="<?= (int)$id ?>">
   <input type="hidden" name="content_json" id="contentJsonInput" value="<?= h($content) ?>">
 
   <?php if ($canSave && !$canStatusEdit): ?>
@@ -80,42 +81,39 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
     <input type="hidden" name="status" value="<?= h($status) ?>">
   <?php endif; ?>
 
+  <nav class="pages-edit-quicknav" aria-label="Bereichsnavigation">
+    <a href="#section-content">Inhalt</a>
+    <a href="#section-builder">PageBuilder</a>
+    <button type="button" data-open-modal="navigation">Navigation</button>
+    <button type="button" data-open-modal="seo">SEO</button>
+    <?php if ($id > 0): ?><button type="button" data-open-modal="revisions">Versionen</button><?php endif; ?>
+  </nav>
+
   <div class="pages-edit-layout">
 
     <section class="pages-edit-left">
 
-      <div class="pages-edit-card">
-        <div class="pages-edit-card-head">
-          <div>
-            <div class="pages-edit-card-title">Inhalt</div>
-            <div class="pages-edit-card-sub">Baue die Seite aus Blöcken.</div>
-          </div>
-          <div class="pages-edit-url">
-            <span class="label">URL</span>
-            <span class="url"><?= h($prettySlug) ?></span>
-          </div>
-        </div>
+      <div class="pages-edit-card" id="section-content">
 
         <div class="pages-edit-fields">
-
+          <div class="pages-edit-meta-preview">
+            <div class="pages-edit-meta-preview__meta">
           <div class="pages-edit-field">
             <div class="pages-edit-field-label">Titel (intern)</div>
             <input id="pageTitleInput" class="pages-edit-input" type="text" name="title" value="<?= h($title) ?>" required <?= $canSave ? '' : 'readonly' ?>>
             <div class="pages-edit-field-hint">Technischer Titel im CMS (z.B. „Kontaktseite“).</div>
           </div>
 
-          <div class="pages-edit-grid2">
-            <div class="pages-edit-field">
-              <div class="pages-edit-field-label">Frontend-Titel</div>
-              <input class="pages-edit-input" type="text" name="frontend_title" value="<?= h($frontendTitle) ?>" placeholder="z.B. Kontakt" <?= $canSave ? '' : 'readonly' ?>>
-              <div class="pages-edit-field-hint">Was im Frontend als Seitenüberschrift angezeigt wird.</div>
-            </div>
+          <div class="pages-edit-field">
+            <div class="pages-edit-field-label">Frontend-Titel</div>
+            <input class="pages-edit-input" type="text" name="frontend_title" value="<?= h($frontendTitle) ?>" placeholder="z.B. Kontakt" <?= $canSave ? '' : 'readonly' ?>>
+            <div class="pages-edit-field-hint">Was im Frontend als Seitenüberschrift angezeigt wird.</div>
+          </div>
 
-            <div class="pages-edit-field">
-              <div class="pages-edit-field-label">Untertitel</div>
-              <input class="pages-edit-input" type="text" name="subtitle" value="<?= h($subtitle) ?>" placeholder="optional" <?= $canSave ? '' : 'readonly' ?>>
-              <div class="pages-edit-field-hint">Optionaler Untertitel im Frontend.</div>
-            </div>
+          <div class="pages-edit-field">
+            <div class="pages-edit-field-label">Untertitel</div>
+            <input class="pages-edit-input" type="text" name="subtitle" value="<?= h($subtitle) ?>" placeholder="optional" <?= $canSave ? '' : 'readonly' ?>>
+            <div class="pages-edit-field-hint">Optionaler Untertitel im Frontend.</div>
           </div>
 
           <div class="pages-edit-field">
@@ -128,9 +126,44 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
             <div class="pages-edit-field-hint pages-edit-slug-live" id="pageSlugLiveHint"></div>
           </div>
 
+          <div class="pages-edit-grid2 pages-edit-grid2--compact" id="section-status">
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">Veröffentlicht</div>
+              <?php if ($canStatusEdit && $canSave): ?>
+                <label class="pages-edit-switch pages-edit-switch--status">
+                  <input type="checkbox" name="status_toggle" value="1" <?= $status === 'live' ? 'checked' : '' ?>>
+                  <span class="pages-edit-switch__slider"></span>
+                  <span class="pages-edit-switch__label"><?= $status === 'live' ? 'Live' : 'Entwurf' ?></span>
+                </label>
+                <input type="hidden" name="status" id="pageStatusHidden" value="<?= h($status) ?>">
+              <?php else: ?>
+                <div class="pages-hint">Status: <strong><?= h($statusLabel) ?></strong></div>
+                <input type="hidden" name="status" value="<?= h($status) ?>">
+              <?php endif; ?>
+            </div>
+
+            <div class="pages-edit-field" id="section-home">
+              <div class="pages-edit-field-label">Startseite</div>
+              <label class="pages-edit-switch pages-edit-switch--home">
+                <input type="checkbox" name="is_home" value="1" <?= $isHome ? 'checked' : '' ?> <?= $canSave ? '' : 'disabled' ?>>
+                <span class="pages-edit-switch__slider"></span>
+                <span class="pages-edit-switch__label"><?= $isHome ? 'Ja' : 'Nein' ?></span>
+              </label>
+              <?php if (!$canSave): ?>
+                <input type="hidden" name="is_home" value="<?= $isHome ? '1' : '0' ?>">
+              <?php endif; ?>
+            </div>
+          </div>
+
+            </div>
+            <div class="pages-edit-meta-preview__preview">
+              <iframe id="pageBuilderPreview" class="pages-edit-preview-frame" title="PageBuilder Vorschau"></iframe>
+            </div>
+          </div>
+
           <hr class="pages-edit-sep">
 
-          <div class="pages-edit-card-title pages-edit-pb-title">PageBuilder</div>
+          <div class="pages-edit-card-title pages-edit-pb-title" id="section-builder">PageBuilder</div>
           <div class="pages-edit-card-sub pages-edit-pb-sub">Text, Bild, Hero — Reihenfolge & Inhalte bearbeiten.</div>
 
           <?php if ($canSave): ?>
@@ -152,15 +185,7 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
             </div>
           <?php endif; ?>
 
-          <div class="pages-edit-preview-split">
-            <div class="pages-edit-preview-split__editor">
-              <div id="blocksContainer"></div>
-            </div>
-            <div class="pages-edit-preview-split__preview">
-              <div class="pages-edit-field-label">Live-Vorschau</div>
-              <iframe id="pageBuilderPreview" class="pages-edit-preview-frame" title="PageBuilder Vorschau"></iframe>
-            </div>
-          </div>
+          <div id="blocksContainer"></div>
 
           <details class="pages-edit-raw">
             <summary class="pages-edit-raw__summary">Raw JSON anzeigen</summary>
@@ -171,212 +196,219 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
         </div>
       </div>
 
-      <div class="pages-edit-actionsbar">
-        <?php if ($canSave): ?>
-          <button type="submit" class="btn">Speichern</button>
-        <?php endif; ?>
-
-        <a class="btn btn--ghost" href="/pages">Zurück</a>
-
-        <div class="pages-edit-actionsbar-spacer"></div>
-
-        <?php if ($id > 0 && !$deleted && $canDelete): ?>
-          <form method="post" action="/pages/delete" class="form-reset">
-            <?= admin_csrf_field() ?>
-            <input type="hidden" name="id" value="<?= (int)$id ?>">
-            <button type="submit" class="btn btn--ghost btn--danger btn--sm">Löschen</button>
-          </form>
-        <?php endif; ?>
-
-        <?php if ($id > 0 && $deleted && $canRestore): ?>
-          <form method="post" action="/pages/restore" class="form-reset">
-            <?= admin_csrf_field() ?>
-            <input type="hidden" name="id" value="<?= (int)$id ?>">
-            <button type="submit" class="btn btn--ghost btn--warn btn--sm">Wiederherstellen</button>
-          </form>
-        <?php endif; ?>
-      </div>
-
     </section>
+  </div>
 
-    <aside class="pages-edit-right">
-
-      <div class="pages-edit-card">
-        <div class="pages-edit-card-title">Status</div>
-        <div class="pages-edit-card-sub">Steuert Veröffentlichung im Frontend.</div>
-
-        <div class="pages-edit-fields">
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">Veröffentlicht</div>
-
-            <?php if ($canStatusEdit && $canSave): ?>
-              <select class="pages-edit-input" name="status">
-                <option value="live"  <?= $status === 'live' ? 'selected' : '' ?>>Live</option>
-                <option value="draft" <?= $status === 'draft' ? 'selected' : '' ?>>Entwurf</option>
-              </select>
-              <div class="pages-edit-field-hint">„Entwurf“ bleibt im Frontend unsichtbar.</div>
-            <?php else: ?>
-              <div class="pages-hint">
-                Status: <strong><?= h($statusLabel) ?></strong>
-              </div>
-              <?php if ($canSave && !$canStatusEdit): ?>
-                <div class="pages-edit-field-hint">Du darfst den Status nicht ändern.</div>
-              <?php endif; ?>
+      <div class="pages-edit-card pages-edit-modal" id="modal-navigation-card">
+        <button type="button" class="pages-edit-modal__close" data-close-modal="navigation" aria-label="Schließen">×</button>
+        <details class="pages-edit-collapsible" open>
+          <summary class="pages-edit-collapsible__summary">
+            <span class="pages-edit-card-title">Navigation</span>
+            <span class="pages-edit-collapsible__meta">Sichtbarkeit & Reihenfolge</span>
+          </summary>
+          <div class="pages-edit-card-sub">Sichtbarkeit, Bereich, Label und Position dieser Seite.</div>
+          <div class="pages-edit-fields">
+            <label class="pages-edit-check">
+              <input type="checkbox" name="nav_visible" value="1" <?= $navVisible ? 'checked' : '' ?> <?= $canSave ? '' : 'disabled' ?>>
+              <span>In Navigation anzeigen</span>
+            </label>
+            <?php if (!$canSave): ?>
+              <input type="hidden" name="nav_visible" value="<?= $navVisible ? '1' : '0' ?>">
             <?php endif; ?>
-          </div>
-        </div>
-      </div>
 
-      <div class="pages-edit-card">
-        <div class="pages-edit-card-title">Startseite</div>
-        <div class="pages-edit-card-sub">Es darf genau eine Startseite geben.</div>
+            <div class="pages-edit-grid2 pages-edit-grid2--compact">
+              <div class="pages-edit-field">
+                <div class="pages-edit-field-label">Bereich</div>
+                <select class="pages-edit-input" name="nav_area" <?= $canSave ? '' : 'disabled' ?>>
+                  <option value="header" <?= $navArea === 'header' ? 'selected' : '' ?>>Header</option>
+                  <option value="footer" <?= $navArea === 'footer' ? 'selected' : '' ?>>Footer</option>
+                  <option value="both"   <?= $navArea === 'both'   ? 'selected' : '' ?>>Beides</option>
+                </select>
+                <?php if (!$canSave): ?>
+                  <input type="hidden" name="nav_area" value="<?= h($navArea) ?>">
+                <?php endif; ?>
+              </div>
 
-        <div class="pages-edit-fields">
-          <label class="pages-edit-check">
-            <input type="checkbox" name="is_home" value="1" <?= $isHome ? 'checked' : '' ?> <?= $canSave ? '' : 'disabled' ?>>
-            <span>Diese Seite ist die Startseite</span>
-          </label>
-          <?php if (!$canSave): ?>
-            <input type="hidden" name="is_home" value="<?= $isHome ? '1' : '0' ?>">
-          <?php endif; ?>
-        </div>
-      </div>
+              <div class="pages-edit-field">
+                <div class="pages-edit-field-label">Einordnen</div>
+                <div class="pages-edit-grid2 pages-edit-grid2--compact">
+                  <select class="pages-edit-input" name="nav_place_mode" <?= $canSave ? '' : 'disabled' ?>>
+                    <option value="before" <?= $navPlaceMode === 'before' ? 'selected' : '' ?>>vor</option>
+                    <option value="after" <?= $navPlaceMode === 'after' ? 'selected' : '' ?>>hinter</option>
+                  </select>
+                  <select class="pages-edit-input" name="nav_place_ref" <?= $canSave ? '' : 'disabled' ?>>
+                    <option value="0">am Ende</option>
+                    <?php foreach ($navCandidates as $cand): ?>
+                      <?php
+                        if (!is_array($cand)) continue;
+                        $cid = (int)($cand['id'] ?? 0);
+                        if ($cid <= 0 || $cid === (int)$id) continue;
+                        if ((int)($cand['nav_visible'] ?? 0) !== 1) continue;
+                        $clabel = (string)($cand['nav_label'] ?? '');
+                        if ($clabel === '') $clabel = (string)($cand['title'] ?? ('Seite #' . $cid));
+                      ?>
+                      <option value="<?= $cid ?>" <?= $navPlaceRef === $cid ? 'selected' : '' ?>><?= h($clabel) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <div class="pages-edit-field-hint">Reihenfolge ohne Zahlenfeld: vor/hinter vorhandene Navigation setzen.</div>
+              </div>
+            </div>
+            <input type="hidden" name="nav_order" value="<?= (int)$navOrder ?>">
 
-      <div class="pages-edit-card">
-        <div class="pages-edit-card-title">Navigation</div>
-        <div class="pages-edit-card-sub">Sichtbarkeit, Bereich, Label & Position.</div>
-
-        <div class="pages-edit-fields">
-          <label class="pages-edit-check">
-            <input type="checkbox" name="nav_visible" value="1" <?= $navVisible ? 'checked' : '' ?> <?= $canSave ? '' : 'disabled' ?>>
-            <span>In Navigation anzeigen</span>
-          </label>
-          <?php if (!$canSave): ?>
-            <input type="hidden" name="nav_visible" value="<?= $navVisible ? '1' : '0' ?>">
-          <?php endif; ?>
-
-          <div class="pages-edit-grid2 pages-edit-grid2--compact">
             <div class="pages-edit-field">
-              <div class="pages-edit-field-label">Bereich</div>
-              <select class="pages-edit-input" name="nav_area" <?= $canSave ? '' : 'disabled' ?>>
-                <option value="header" <?= $navArea === 'header' ? 'selected' : '' ?>>Header</option>
-                <option value="footer" <?= $navArea === 'footer' ? 'selected' : '' ?>>Footer</option>
-                <option value="both"   <?= $navArea === 'both'   ? 'selected' : '' ?>>Beides</option>
+              <div class="pages-edit-field-label">Label</div>
+              <input class="pages-edit-input" type="text" name="nav_label" value="<?= h($navLabel) ?>" placeholder="z.B. Kontakt" <?= $canSave ? '' : 'readonly' ?>>
+              <div class="pages-edit-field-hint">Pflicht, wenn „In Navigation anzeigen“ aktiv ist.</div>
+            </div>
+
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">Unterseite</div>
+              <select class="pages-edit-input" disabled>
+                <option>Keine (Feature folgt)</option>
+              </select>
+              <div class="pages-edit-field-hint">Hierarchie/Unterseiten sind aktuell noch nicht im Datenmodell vorhanden.</div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="pages-edit-card pages-edit-modal" id="modal-seo-card">
+        <button type="button" class="pages-edit-modal__close" data-close-modal="seo" aria-label="Schließen">×</button>
+        <details class="pages-edit-collapsible" open>
+          <summary class="pages-edit-collapsible__summary">
+            <span class="pages-edit-card-title">SEO</span>
+            <span class="pages-edit-collapsible__meta">Overrides pro Seite</span>
+          </summary>
+          <div class="pages-edit-card-sub">Overrides für diese Seite. Leer = globaler Default aus Einstellungen.</div>
+          <div class="pages-edit-fields">
+
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">Meta-Titel</div>
+              <input class="pages-edit-input" type="text" name="seo_meta_title" value="<?= h($seoMetaTitle) ?>" placeholder="Aus Seitentitel" <?= $canSave ? '' : 'readonly' ?>>
+            </div>
+
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">Meta-Description</div>
+              <textarea class="pages-edit-textarea" name="seo_meta_description" rows="3" placeholder="Aus globalem Default" <?= $canSave ? '' : 'readonly' ?>><?= h($seoMetaDesc) ?></textarea>
+            </div>
+
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">Robots</div>
+              <select class="pages-edit-input" name="seo_robots" <?= $canSave ? '' : 'disabled' ?>>
+                <option value="">— globaler Default —</option>
+                <?php foreach (['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] as $rv): ?>
+                  <option value="<?= h($rv) ?>" <?= $seoRobots === $rv ? 'selected' : '' ?>><?= h($rv) ?></option>
+                <?php endforeach; ?>
               </select>
               <?php if (!$canSave): ?>
-                <input type="hidden" name="nav_area" value="<?= h($navArea) ?>">
+                <input type="hidden" name="seo_robots" value="<?= h($seoRobots) ?>">
               <?php endif; ?>
             </div>
 
             <div class="pages-edit-field">
-              <div class="pages-edit-field-label">Position</div>
-              <input class="pages-edit-input" type="number" name="nav_order" value="<?= (int)$navOrder ?>" min="0" step="1" <?= $canSave ? '' : 'readonly' ?>>
+              <div class="pages-edit-field-label">Canonical URL</div>
+              <input class="pages-edit-input" type="text" name="seo_canonical_url" value="<?= h($seoCanonical) ?>" placeholder="Leer = auto" <?= $canSave ? '' : 'readonly' ?>>
+            </div>
+
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">OG-Titel</div>
+              <input class="pages-edit-input" type="text" name="seo_og_title" value="<?= h($seoOgTitle) ?>" placeholder="Leer = Meta-Titel" <?= $canSave ? '' : 'readonly' ?>>
+            </div>
+
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">OG-Description</div>
+              <textarea class="pages-edit-textarea" name="seo_og_description" rows="2" placeholder="Leer = Meta-Description" <?= $canSave ? '' : 'readonly' ?>><?= h($seoOgDesc) ?></textarea>
+            </div>
+
+            <div class="pages-edit-field">
+              <div class="pages-edit-field-label">OG-Bild (URL)</div>
+              <input class="pages-edit-input" type="text" name="seo_og_image_url" value="<?= h($seoOgImage) ?>" placeholder="https://..." <?= $canSave ? '' : 'readonly' ?>>
             </div>
           </div>
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">Label</div>
-            <input class="pages-edit-input" type="text" name="nav_label" value="<?= h($navLabel) ?>" placeholder="z.B. Kontakt" <?= $canSave ? '' : 'readonly' ?>>
-            <div class="pages-edit-field-hint">Pflicht, wenn „In Navigation anzeigen“ aktiv ist.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="pages-edit-card">
-        <div class="pages-edit-card-title">SEO</div>
-        <div class="pages-edit-card-sub">Overrides für diese Seite. Leer = globaler Default aus Einstellungen.</div>
-
-        <div class="pages-edit-fields">
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">Meta-Titel</div>
-            <input class="pages-edit-input" type="text" name="seo_meta_title" value="<?= h($seoMetaTitle) ?>" placeholder="Aus Seitentitel" <?= $canSave ? '' : 'readonly' ?>>
-          </div>
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">Meta-Description</div>
-            <textarea class="pages-edit-textarea" name="seo_meta_description" rows="3" placeholder="Aus globalem Default" <?= $canSave ? '' : 'readonly' ?>><?= h($seoMetaDesc) ?></textarea>
-          </div>
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">Robots</div>
-            <select class="pages-edit-input" name="seo_robots" <?= $canSave ? '' : 'disabled' ?>>
-              <option value="">— globaler Default —</option>
-              <?php foreach (['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] as $rv): ?>
-                <option value="<?= h($rv) ?>" <?= $seoRobots === $rv ? 'selected' : '' ?>><?= h($rv) ?></option>
-              <?php endforeach; ?>
-            </select>
-            <?php if (!$canSave): ?>
-              <input type="hidden" name="seo_robots" value="<?= h($seoRobots) ?>">
-            <?php endif; ?>
-          </div>
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">Canonical URL</div>
-            <input class="pages-edit-input" type="text" name="seo_canonical_url" value="<?= h($seoCanonical) ?>" placeholder="Leer = auto" <?= $canSave ? '' : 'readonly' ?>>
-          </div>
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">OG-Titel</div>
-            <input class="pages-edit-input" type="text" name="seo_og_title" value="<?= h($seoOgTitle) ?>" placeholder="Leer = Meta-Titel" <?= $canSave ? '' : 'readonly' ?>>
-          </div>
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">OG-Description</div>
-            <textarea class="pages-edit-textarea" name="seo_og_description" rows="2" placeholder="Leer = Meta-Description" <?= $canSave ? '' : 'readonly' ?>><?= h($seoOgDesc) ?></textarea>
-          </div>
-
-          <div class="pages-edit-field">
-            <div class="pages-edit-field-label">OG-Bild (URL)</div>
-            <input class="pages-edit-input" type="text" name="seo_og_image_url" value="<?= h($seoOgImage) ?>" placeholder="https://..." <?= $canSave ? '' : 'readonly' ?>>
-          </div>
-
-        </div>
+        </details>
       </div>
 
       <?php if ($id > 0): ?>
-      <div class="pages-edit-card">
-        <div class="pages-edit-card-title">Versionen</div>
-        <div class="pages-edit-card-sub">Letzte 20 Revisionen, automatische Historie.</div>
-        <div class="pages-edit-fields">
-          <?php if (!$revisions): ?>
-            <div class="pages-edit-field-hint">Noch keine Revisionen vorhanden.</div>
-          <?php else: ?>
-            <?php foreach ($revisions as $rev): ?>
-              <?php
-                $rid = (int)($rev['id'] ?? 0);
-                if ($rid <= 0) continue;
-                $createdAt = (string)($rev['created_at'] ?? '');
-              ?>
-              <div class="pages-edit-field">
-                <div class="pages-edit-field-label">#<?= (int)$rid ?> · <?= h($createdAt) ?></div>
-                <div class="pages-edit-field-hint"><?= h((string)($rev['title'] ?? '')) ?></div>
-                <div class="pages-edit-pb-actions">
-                  <a class="btn btn--ghost btn--sm" href="/pages/edit?id=<?= (int)$id ?>&revision=<?= (int)$rid ?>">Vorschau</a>
-                  <?php if ($canSave): ?>
-                    <button type="submit" class="btn btn--ghost btn--sm" name="restore_revision_id" value="<?= (int)$rid ?>">Diese Version wiederherstellen</button>
-                  <?php endif; ?>
+      <div class="pages-edit-card pages-edit-modal" id="modal-revisions-card">
+        <button type="button" class="pages-edit-modal__close" data-close-modal="revisions" aria-label="Schließen">×</button>
+        <details class="pages-edit-collapsible">
+          <summary class="pages-edit-collapsible__summary">
+            <span class="pages-edit-card-title">Versionen</span>
+            <span class="pages-edit-collapsible__meta"><?= (int)count($revisions) ?> Einträge</span>
+          </summary>
+          <div class="pages-edit-card-sub">Letzte 20 Revisionen, automatische Historie.</div>
+          <div class="pages-edit-fields">
+            <?php if (!$revisions): ?>
+              <div class="pages-edit-field-hint">Noch keine Revisionen vorhanden.</div>
+            <?php else: ?>
+              <?php foreach ($revisions as $rev): ?>
+                <?php
+                  $rid = (int)($rev['id'] ?? 0);
+                  if ($rid <= 0) continue;
+                  $createdAt = (string)($rev['created_at'] ?? '');
+                ?>
+                <div class="pages-edit-field">
+                  <div class="pages-edit-field-label">#<?= (int)$rid ?> · <?= h($createdAt) ?></div>
+                  <div class="pages-edit-field-hint"><?= h((string)($rev['title'] ?? '')) ?></div>
+                  <div class="pages-edit-pb-actions">
+                    <a class="btn btn--ghost btn--sm" href="/pages/edit?id=<?= (int)$id ?>&revision=<?= (int)$rid ?>">Vorschau</a>
+                    <?php if ($canSave): ?>
+                      <button type="submit" class="btn btn--ghost btn--sm" name="restore_revision_id" value="<?= (int)$rid ?>">Diese Version wiederherstellen</button>
+                    <?php endif; ?>
+                  </div>
                 </div>
-              </div>
-            <?php endforeach; ?>
-          <?php endif; ?>
+              <?php endforeach; ?>
+            <?php endif; ?>
 
-          <?php if (is_array($selectedRevision)): ?>
-            <hr class="pages-edit-sep">
-            <div class="pages-edit-field-label">Vorschau Revision #<?= (int)($selectedRevision['id'] ?? 0) ?></div>
-            <textarea class="pages-edit-textarea" rows="8" readonly><?= h((string)($selectedRevision['content_json'] ?? '')) ?></textarea>
-          <?php endif; ?>
-        </div>
+            <?php if (is_array($selectedRevision)): ?>
+              <hr class="pages-edit-sep">
+              <div class="pages-edit-field-label">Vorschau Revision #<?= (int)($selectedRevision['id'] ?? 0) ?></div>
+              <textarea class="pages-edit-textarea" rows="8" readonly><?= h((string)($selectedRevision['content_json'] ?? '')) ?></textarea>
+            <?php endif; ?>
+          </div>
+        </details>
       </div>
       <?php endif; ?>
 
-    </aside>
+  <div class="pages-edit-floating-actions" aria-label="Seitenaktionen">
+    <?php if ($canSave): ?>
+      <button type="submit" class="pages-edit-iconbtn pages-edit-iconbtn--save" title="Speichern" aria-label="Speichern">💾</button>
+    <?php endif; ?>
 
+    <a class="pages-edit-iconbtn pages-edit-iconbtn--cancel" href="/pages" title="Abbrechen" aria-label="Abbrechen">✕</a>
+
+    <?php if ($id > 0 && !$deleted && $canDelete): ?>
+      <button
+        type="submit"
+        class="pages-edit-iconbtn pages-edit-iconbtn--delete"
+        formaction="/pages/delete"
+        formmethod="post"
+        name="id"
+        value="<?= (int)$id ?>"
+        title="Löschen"
+        aria-label="Löschen"
+      >🗑</button>
+    <?php endif; ?>
+
+    <?php if ($id > 0 && $deleted && $canRestore): ?>
+      <button
+        type="submit"
+        class="pages-edit-iconbtn pages-edit-iconbtn--restore"
+        formaction="/pages/restore"
+        formmethod="post"
+        name="id"
+        value="<?= (int)$id ?>"
+        title="Wiederherstellen"
+        aria-label="Wiederherstellen"
+      >↺</button>
+    <?php endif; ?>
   </div>
+
+  <div class="pages-edit-modal-backdrop" id="pagesEditModalBackdrop" hidden></div>
+
 </form>
 
-<link rel="stylesheet" href="https://cdn.quilljs.com/1.3.6/quill.snow.css">
-<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
 (() => {
@@ -404,6 +436,7 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
   let sortableInstance = null;
   const historyStack = [];
   let historyIndex = -1;
+  const collapsedBlocks = new Set();
 
   function safeParseJson(s) { try { return JSON.parse(s); } catch { return null; } }
   function ensureModel(model) {
@@ -415,6 +448,7 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
   function uuid() { return 'b' + Math.random().toString(16).slice(2) + Date.now().toString(16); }
 
   const contentInput = document.getElementById('contentJsonInput');
+  const pageIdInput  = document.getElementById('pageIdInput');
   const rawTextarea  = document.getElementById('rawJsonTextarea');
   const container    = document.getElementById('blocksContainer');
   const previewFrame = document.getElementById('pageBuilderPreview');
@@ -424,6 +458,111 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
   const undoBtn      = document.getElementById('pbUndoBtn');
   const redoBtn      = document.getElementById('pbRedoBtn');
   const form         = document.getElementById('pageEditForm');
+  const quickNavLinks = Array.from(document.querySelectorAll('.pages-edit-quicknav a[href^="#"]'));
+  const openModalBtns = Array.from(document.querySelectorAll('[data-open-modal]'));
+  const closeModalBtns = Array.from(document.querySelectorAll('[data-close-modal]'));
+  const modalBackdrop = document.getElementById('pagesEditModalBackdrop');
+  const navigationModal = document.getElementById('modal-navigation-card');
+  const seoModal = document.getElementById('modal-seo-card');
+  const revisionsModal = document.getElementById('modal-revisions-card');
+  const statusToggle = document.querySelector('input[name="status_toggle"]');
+  const statusHidden = document.getElementById('pageStatusHidden');
+  const homeToggle = document.querySelector('input[name="is_home"]');
+  let previewDebounceTimer = null;
+  let previewRequestId = 0;
+
+  quickNavLinks.forEach((link) => {
+    link.addEventListener('click', (ev) => {
+      const href = link.getAttribute('href') || '';
+      if (!href.startsWith('#')) return;
+      const targetId = href.slice(1);
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      ev.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (typeof history.replaceState === 'function') {
+        history.replaceState(null, '', href);
+      }
+    });
+  });
+
+  function modalByName(name) {
+    if (name === 'navigation') return navigationModal;
+    if (name === 'seo') return seoModal;
+    if (name === 'revisions') return revisionsModal;
+    return null;
+  }
+
+  function closeAllModals() {
+    [navigationModal, seoModal, revisionsModal].forEach((m) => m && m.classList.remove('is-open'));
+    if (modalBackdrop) {
+      modalBackdrop.classList.remove('is-open');
+      modalBackdrop.hidden = true;
+    }
+  }
+
+  function openModal(name) {
+    const modal = modalByName(name);
+    if (!modal) return;
+    closeAllModals();
+    modal.classList.add('is-open');
+    if (modalBackdrop) {
+      modalBackdrop.hidden = false;
+      modalBackdrop.classList.add('is-open');
+    }
+  }
+
+  openModalBtns.forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const name = btn.getAttribute('data-open-modal') || '';
+      openModal(name);
+    });
+  });
+
+  closeModalBtns.forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      closeAllModals();
+    });
+  });
+
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener('click', closeAllModals);
+  }
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') closeAllModals();
+  });
+
+  function updateSwitchLabel(inputEl) {
+    if (!inputEl) return;
+    const wrapper = inputEl.closest('.pages-edit-switch');
+    const label = wrapper ? wrapper.querySelector('.pages-edit-switch__label') : null;
+    if (!label) return;
+    if (inputEl.name === 'status_toggle') {
+      label.textContent = inputEl.checked ? 'Live' : 'Entwurf';
+    } else if (inputEl.name === 'is_home') {
+      label.textContent = inputEl.checked ? 'Ja' : 'Nein';
+    }
+  }
+
+  if (statusToggle && statusHidden) {
+    statusToggle.addEventListener('change', () => {
+      statusHidden.value = statusToggle.checked ? 'live' : 'draft';
+      updateSwitchLabel(statusToggle);
+      schedulePreviewUpdate();
+    });
+    updateSwitchLabel(statusToggle);
+  }
+
+  if (homeToggle) {
+    homeToggle.addEventListener('change', () => {
+      updateSwitchLabel(homeToggle);
+      schedulePreviewUpdate();
+    });
+    updateSwitchLabel(homeToggle);
+  }
 
   let model = ensureModel(
     safeParseJson(contentInput.value) ||
@@ -447,6 +586,8 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
       return { id: (typeof b.id === 'string' && b.id) ? b.id : uuid(), type, data };
     })
     .filter(b => defs[b.type]);
+
+  model.blocks.forEach((b) => collapsedBlocks.add(b.id));
 
   function snapshot() {
     return JSON.stringify({ blocks: model.blocks.map(b => ({ id: b.id, type: b.type, data: Object.assign({}, b.data) })) });
@@ -491,7 +632,7 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
     const json = JSON.stringify(out);
     contentInput.value = json;
     if (rawTextarea) rawTextarea.value = json;
-    updatePreview();
+    schedulePreviewUpdate();
     if (pushToHistory) pushHistory();
   }
 
@@ -527,65 +668,74 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
     activeMediaPickerInput.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
-  function esc(s) {
-    return String(s ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
+  function valueOf(name) {
+    if (!form) return '';
+    const el = form.querySelector(`[name="${name}"]`);
+    if (!el) return '';
+    if (el instanceof HTMLInputElement && el.type === 'checkbox') {
+      return el.checked ? (el.value || '1') : '';
+    }
+    return String(el.value ?? '');
   }
 
-  function previewBlockHtml(block) {
-    const data = block && block.data ? block.data : {};
-    if (block.type === 'hero') {
-      const bg = String(data.image_url || '').trim();
-      const style = bg ? ` style="background-image:url('${esc(bg)}');background-size:cover;background-position:center;"` : '';
-      return `<section class="pv-hero"${style}><h1>${esc(data.headline || '')}</h1><p>${esc(data.subtitle || '')}</p></section>`;
+  function schedulePreviewUpdate() {
+    if (previewDebounceTimer) {
+      clearTimeout(previewDebounceTimer);
     }
-    if (block.type === 'image') {
-      return `<section class="pv-card"><img src="${esc(data.url || '')}" alt="${esc(data.alt || '')}"></section>`;
-    }
-    if (block.type === 'text') {
-      const title = String(data.title || '').trim();
-      const subtitle = String(data.subtitle || '').trim();
-      const richText = String(data.text || '').trim();
-      const imageUrl = String(data.image_url || '').trim();
-      return `<section class="pv-card">${title ? `<h2>${esc(title)}</h2>` : ''}${subtitle ? `<p class="pv-sub">${esc(subtitle)}</p>` : ''}${imageUrl ? `<img src="${esc(imageUrl)}" alt="">` : ''}<div class="pv-rich">${richText}</div></section>`;
-    }
-    if (block.type === 'columns') {
-      return `<section class="pv-card"><h3>${esc(data.headline || 'Spalten')}</h3><div class="pv-cols"><div><strong>${esc(data.col_1_title || '')}</strong><p>${esc(data.col_1_text || '')}</p></div><div><strong>${esc(data.col_2_title || '')}</strong><p>${esc(data.col_2_text || '')}</p></div></div></section>`;
-    }
-    if (block.type === 'cta') {
-      return `<section class="pv-card pv-cta"><h3>${esc(data.headline || '')}</h3><p>${esc(data.text || '')}</p><a href="${esc(data.button_url || '#')}" class="pv-btn">${esc(data.button_text || 'Mehr')}</a></section>`;
-    }
-    if (block.type === 'faq') {
-      return `<section class="pv-card"><h3>${esc(data.headline || 'FAQ')}</h3><pre>${esc(data.items_json || '')}</pre></section>`;
-    }
-    if (block.type === 'video') {
-      return `<section class="pv-card"><h3>${esc(data.headline || 'Video')}</h3><p>${esc(data.video_url || data.video_id || '')}</p></section>`;
-    }
-    if (block.type === 'gallery') {
-      return `<section class="pv-card"><h3>${esc(data.headline || 'Galerie')}</h3><pre>${esc(data.items_json || '')}</pre></section>`;
-    }
-    return `<section class="pv-card"><pre>${esc(JSON.stringify(data, null, 2))}</pre></section>`;
+    previewDebounceTimer = setTimeout(() => {
+      updatePreview();
+    }, 220);
   }
 
-  function updatePreview() {
+  async function updatePreview() {
     if (!previewFrame) return;
-    const blocksHtml = model.blocks.map(previewBlockHtml).join('');
-    previewFrame.srcdoc = `<!doctype html><html lang="de"><head><meta charset="utf-8"><style>
-      body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;padding:16px;background:#f7f9fc;color:#0f172a}
-      .pv-hero{padding:36px 20px;border-radius:14px;background:#0f172a;color:#fff;margin-bottom:14px}
-      .pv-card{background:#fff;border:1px solid #dce4ef;border-radius:12px;padding:14px;margin-bottom:12px}
-      .pv-card img{max-width:100%;border-radius:10px}
-      .pv-sub{color:#64748b}
-      .pv-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-      .pv-rich{line-height:1.6}
-      .pv-btn{display:inline-block;padding:8px 12px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none}
-      pre{white-space:pre-wrap}
-      @media (max-width:900px){.pv-cols{grid-template-columns:1fr}}
-    </style></head><body>${blocksHtml || '<p>Keine Blöcke vorhanden.</p>'}</body></html>`;
+
+    const requestId = ++previewRequestId;
+    const payload = {
+      id: pageIdInput ? Number(pageIdInput.value || '0') : 0,
+      title: valueOf('title'),
+      frontend_title: valueOf('frontend_title'),
+      subtitle: valueOf('subtitle'),
+      slug: valueOf('slug'),
+      status: valueOf('status'),
+      is_home: valueOf('is_home') !== '',
+      nav_visible: valueOf('nav_visible') !== '',
+      nav_label: valueOf('nav_label'),
+      nav_area: valueOf('nav_area'),
+      nav_place_mode: valueOf('nav_place_mode'),
+      nav_place_ref: valueOf('nav_place_ref'),
+      content_json: contentInput ? contentInput.value : '{"blocks":[]}',
+      seo_meta_title: valueOf('seo_meta_title'),
+      seo_meta_description: valueOf('seo_meta_description'),
+      seo_robots: valueOf('seo_robots'),
+      seo_canonical_url: valueOf('seo_canonical_url'),
+      seo_og_title: valueOf('seo_og_title'),
+      seo_og_description: valueOf('seo_og_description'),
+      seo_og_image_url: valueOf('seo_og_image_url'),
+    };
+
+    try {
+      const resp = await fetch('/pages/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(payload),
+        credentials: 'same-origin',
+      });
+      const html = await resp.text();
+      if (requestId !== previewRequestId) return;
+      if (!resp.ok || !html || !html.trim()) {
+        const msg = `Vorschau konnte nicht geladen werden (HTTP ${resp.status}).`;
+        previewFrame.srcdoc = `<!doctype html><html lang="de"><body style="font-family:system-ui;padding:16px;color:#111">${msg}</body></html>`;
+        return;
+      }
+      previewFrame.srcdoc = html;
+    } catch (err) {
+      if (requestId !== previewRequestId) return;
+      previewFrame.srcdoc = '<!doctype html><html lang="de"><body style="font-family:system-ui;padding:16px">Vorschau konnte nicht geladen werden.</body></html>';
+    }
   }
 
   function syncModelFromDomOrder() {
@@ -606,7 +756,7 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
     if (sortableInstance) return;
     sortableInstance = Sortable.create(container, {
       animation: 150,
-      handle: '.pages-edit-card-head',
+      handle: '.pages-edit-drag-handle',
       draggable: '.pages-edit-blockcard',
       onEnd: () => syncModelFromDomOrder(),
     });
@@ -626,6 +776,137 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
     slugLiveHint.textContent = 'URL wird: ' + generated;
   }
 
+  function keepSelectionOnToolbarClick(btn) {
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+  }
+
+  function createToolbarButton(label, title, onClick, className = '') {
+    const btn = el('button', { type: 'button', class: `pages-edit-rt-btn ${className}`.trim(), title, html: label });
+    keepSelectionOnToolbarClick(btn);
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  function createWordLikeEditor(initialHtml, onCommit) {
+    const wrap = el('div', { class: 'pages-edit-richtext' });
+    const toolbar = el('div', { class: 'pages-edit-richtext__toolbar' });
+    const groups = [
+      el('div', { class: 'pages-edit-rt-group' }),
+      el('div', { class: 'pages-edit-rt-group' }),
+      el('div', { class: 'pages-edit-rt-group' }),
+      el('div', { class: 'pages-edit-rt-group' }),
+    ];
+    groups.forEach((g) => toolbar.appendChild(g));
+
+    const surface = el('div', { class: 'pages-edit-richtext__surface' });
+    surface.contentEditable = CAN_EDIT ? 'true' : 'false';
+    surface.innerHTML = initialHtml || '';
+
+    const htmlArea = el('textarea', { class: 'pages-edit-textarea pages-edit-richtext__html', rows: '10' });
+    htmlArea.value = initialHtml || '';
+    htmlArea.style.display = 'none';
+    htmlArea.readOnly = !CAN_EDIT;
+
+    let htmlMode = false;
+    const commit = () => {
+      const html = htmlMode ? htmlArea.value : surface.innerHTML;
+      onCommit(html);
+    };
+
+    const run = (cmd, val = null) => {
+      if (!CAN_EDIT || htmlMode) return;
+      surface.focus();
+      try { document.execCommand(cmd, false, val); } catch (_e) {}
+      commit();
+    };
+
+    const blockFormatSelect = el('select', { class: 'pages-edit-input pages-edit-rt-select' });
+    [
+      ['<p>', 'Absatz'],
+      ['<h2>', 'Überschrift 2'],
+      ['<h3>', 'Überschrift 3'],
+      ['<blockquote>', 'Zitat'],
+    ].forEach(([tag, label]) => {
+      const o = document.createElement('option');
+      o.value = tag;
+      o.textContent = label;
+      blockFormatSelect.appendChild(o);
+    });
+    blockFormatSelect.disabled = !CAN_EDIT;
+    blockFormatSelect.addEventListener('change', () => {
+      if (!CAN_EDIT || htmlMode) return;
+      run('formatBlock', blockFormatSelect.value);
+    });
+    groups[0].appendChild(blockFormatSelect);
+    groups[0].appendChild(createToolbarButton('B', 'Fett', () => run('bold'), 'is-strong'));
+    groups[0].appendChild(createToolbarButton('I', 'Kursiv', () => run('italic'), 'is-italic'));
+    groups[0].appendChild(createToolbarButton('U', 'Unterstreichen', () => run('underline'), 'is-underline'));
+
+    groups[1].appendChild(createToolbarButton('↤', 'Linksbündig', () => run('justifyLeft')));
+    groups[1].appendChild(createToolbarButton('↔', 'Zentriert', () => run('justifyCenter')));
+    groups[1].appendChild(createToolbarButton('↦', 'Rechtsbündig', () => run('justifyRight')));
+    groups[1].appendChild(createToolbarButton('☰', 'Blocksatz', () => run('justifyFull')));
+
+    groups[2].appendChild(createToolbarButton('• Liste', 'Aufzählung', () => run('insertUnorderedList')));
+    groups[2].appendChild(createToolbarButton('1. Liste', 'Nummerierung', () => run('insertOrderedList')));
+    groups[2].appendChild(createToolbarButton('↦ Einzug', 'Einzug erhöhen', () => run('indent')));
+    groups[2].appendChild(createToolbarButton('↤ Einzug', 'Einzug verringern', () => run('outdent')));
+
+    const colorInput = el('input', { type: 'color', class: 'pages-edit-rt-color' });
+    colorInput.value = '#111111';
+    colorInput.disabled = !CAN_EDIT;
+    colorInput.addEventListener('input', () => run('foreColor', colorInput.value));
+    const highlightInput = el('input', { type: 'color', class: 'pages-edit-rt-color' });
+    highlightInput.value = '#fff2a8';
+    highlightInput.disabled = !CAN_EDIT;
+    highlightInput.addEventListener('input', () => run('hiliteColor', highlightInput.value));
+
+    groups[3].appendChild(createToolbarButton('🔗', 'Link einfügen', () => {
+      if (!CAN_EDIT || htmlMode) return;
+      const url = window.prompt('Link-URL', 'https://');
+      if (!url) return;
+      run('createLink', url);
+    }));
+    groups[3].appendChild(createToolbarButton('🚫🔗', 'Link entfernen', () => run('unlink')));
+    groups[3].appendChild(createToolbarButton('Tx', 'Formatierung entfernen', () => {
+      run('removeFormat');
+      run('unlink');
+    }));
+    groups[3].appendChild(colorInput);
+    groups[3].appendChild(highlightInput);
+
+    const htmlModeBtn = createToolbarButton('&lt;&gt;', 'HTML anzeigen', () => {
+      if (!CAN_EDIT) return;
+      htmlMode = !htmlMode;
+      wrap.classList.toggle('is-html-mode', htmlMode);
+      if (htmlMode) {
+        htmlArea.value = surface.innerHTML;
+        htmlArea.style.display = '';
+        surface.style.display = 'none';
+      } else {
+        surface.innerHTML = htmlArea.value || '';
+        htmlArea.style.display = 'none';
+        surface.style.display = '';
+      }
+      commit();
+    }, 'pages-edit-rt-btn--mode');
+    groups[3].appendChild(htmlModeBtn);
+
+    surface.addEventListener('input', () => {
+      if (htmlMode) return;
+      commit();
+    });
+    htmlArea.addEventListener('input', () => {
+      if (!htmlMode) return;
+      commit();
+    });
+
+    wrap.appendChild(toolbar);
+    wrap.appendChild(surface);
+    wrap.appendChild(htmlArea);
+    return wrap;
+  }
+
   function renderField(block, key, rule) {
     const labelText = (rule && rule.label) ? rule.label : key;
     const hintText  = (rule && rule.hint) ? rule.hint : '';
@@ -635,6 +916,9 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
 
     const control = (rule && rule.control) ? rule.control : 'input';
     const rows = (rule && rule.rows) ? String(rule.rows) : '6';
+    const rangeMin = (rule && Object.prototype.hasOwnProperty.call(rule, 'min')) ? String(rule.min) : '0';
+    const rangeMax = (rule && Object.prototype.hasOwnProperty.call(rule, 'max')) ? String(rule.max) : '100';
+    const rangeStep = (rule && Object.prototype.hasOwnProperty.call(rule, 'step')) ? String(rule.step) : '1';
     const enumVals = (rule && Array.isArray(rule.enum)) ? rule.enum : null;
 
     let val = '';
@@ -686,19 +970,11 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
         serialize();
       });
     } else if (control === 'textarea') {
-      if (block.type === 'text' && key === 'text' && typeof Quill !== 'undefined') {
-        input = el('div');
-        const editor = el('div', {class: 'pages-edit-wysiwyg'});
-        input.appendChild(editor);
-        const q = new Quill(editor, {
-          theme: 'snow',
-          modules: { toolbar: [['bold', 'italic', 'underline'], [{header: [2, 3, false]}], [{list: 'ordered'}, {list: 'bullet'}], ['link']] },
-        });
-        q.root.innerHTML = val;
-        if (!CAN_EDIT) q.enable(false);
-        q.on('text-change', () => {
+      const useWordEditor = key === 'text' || key === 'html' || block.type === 'text';
+      if (useWordEditor) {
+        input = createWordLikeEditor(val, (html) => {
           if (!CAN_EDIT) return;
-          block.data[key] = q.root.innerHTML;
+          block.data[key] = html;
           serialize();
         });
       } else {
@@ -711,6 +987,47 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
           serialize();
         });
       }
+    } else if (control === 'range') {
+      const rangeWrap = el('div', {class: 'pages-edit-range'});
+      const range = el('input', {class: 'pages-edit-range__slider', type: 'range', min: rangeMin, max: rangeMax, step: rangeStep});
+      const number = el('input', {class: 'pages-edit-input pages-edit-range__number', type: 'number', min: rangeMin, max: rangeMax, step: rangeStep});
+      const display = el('div', {class: 'pages-edit-field-hint pages-edit-range__value'});
+
+      const clampRangeValue = (raw) => {
+        let n = Number.parseFloat(String(raw ?? '').trim());
+        const min = Number.parseFloat(rangeMin);
+        const max = Number.parseFloat(rangeMax);
+        if (!Number.isFinite(n)) n = Number.isFinite(min) ? min : 0;
+        if (Number.isFinite(min) && n < min) n = min;
+        if (Number.isFinite(max) && n > max) n = max;
+        return n;
+      };
+
+      const initial = clampRangeValue(val);
+      range.value = String(initial);
+      number.value = String(initial);
+      display.textContent = `Aktuell: ${Math.round(initial)}%`;
+      range.disabled = !CAN_EDIT;
+      number.readOnly = !CAN_EDIT;
+
+      const commit = (nextVal) => {
+        const n = clampRangeValue(nextVal);
+        const out = String(Math.round(n));
+        range.value = out;
+        number.value = out;
+        display.textContent = `Aktuell: ${out}%`;
+        if (!CAN_EDIT) return;
+        block.data[key] = out;
+        serialize();
+      };
+
+      range.addEventListener('input', () => commit(range.value));
+      number.addEventListener('input', () => commit(number.value));
+
+      rangeWrap.appendChild(range);
+      rangeWrap.appendChild(number);
+      rangeWrap.appendChild(display);
+      input = rangeWrap;
     } else {
       input = el('input', {class: 'pages-edit-input', type: 'text'});
       input.value = val;
@@ -748,20 +1065,39 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
 
     model.blocks.forEach((block, idx) => {
       const head = el('div', {class: 'pages-edit-card-head'});
+      const isCollapsed = collapsedBlocks.has(block.id);
 
       const left = el('div', {class: 'pages-edit-blockhead-left'});
+      left.appendChild(el('span', {class: 'pages-edit-drag-handle', html: '⋮⋮'}));
       const displayLabel = blockLabel(block.type);
       left.appendChild(el('strong', {html: displayLabel}));
       left.appendChild(el('span', {class: 'pages-edit-blockhead-meta', html: `(${block.type})`}));
 
       const right = el('div', {class: 'pages-edit-blockhead-actions'});
+      const toggleBtn = el('button', {type:'button', class:'btn btn--ghost btn--sm', html: isCollapsed ? 'Ausklappen' : 'Einklappen'});
+      toggleBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (collapsedBlocks.has(block.id)) {
+          collapsedBlocks.delete(block.id);
+          model.blocks.forEach((b) => {
+            if (b.id !== block.id) collapsedBlocks.add(b.id);
+          });
+        } else {
+          collapsedBlocks.add(block.id);
+        }
+        render();
+      });
+      right.appendChild(toggleBtn);
 
       if (CAN_EDIT) {
         const upBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm', html:'↑'});
         const dnBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm', html:'↓'});
         const delBtn = el('button', {type:'button', class:'btn btn--ghost btn--danger btn--sm', html:'Löschen'});
 
-        upBtn.addEventListener('click', () => {
+        upBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
           if (idx <= 0) return;
           const tmp = model.blocks[idx - 1];
           model.blocks[idx - 1] = model.blocks[idx];
@@ -770,7 +1106,9 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
           serialize();
         });
 
-        dnBtn.addEventListener('click', () => {
+        dnBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
           if (idx >= model.blocks.length - 1) return;
           const tmp = model.blocks[idx + 1];
           model.blocks[idx + 1] = model.blocks[idx];
@@ -779,8 +1117,11 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
           serialize();
         });
 
-        delBtn.addEventListener('click', () => {
+        delBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
           model.blocks.splice(idx, 1);
+          collapsedBlocks.delete(block.id);
           render();
           serialize();
         });
@@ -796,8 +1137,11 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
       head.appendChild(right);
 
       const card = el('div', {class: 'pages-edit-card pages-edit-blockcard', 'data-block-id': block.id});
+      if (isCollapsed) card.classList.add('is-collapsed');
       card.appendChild(head);
-      card.appendChild(renderBlockFields(block));
+      const body = renderBlockFields(block);
+      body.classList.add('pages-edit-blockbody');
+      card.appendChild(body);
 
       container.appendChild(card);
     });
@@ -818,6 +1162,10 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
         type,
         data: Object.assign({}, defaults)
       });
+      model.blocks.forEach((b) => {
+        if (b.id !== model.blocks[model.blocks.length - 1].id) collapsedBlocks.add(b.id);
+      });
+      collapsedBlocks.delete(model.blocks[model.blocks.length - 1].id);
 
       render();
       serialize(true);
@@ -853,8 +1201,16 @@ $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : nu
   });
 
   if (titleInput) {
-    titleInput.addEventListener('input', updateSlugHint);
+    titleInput.addEventListener('input', () => {
+      updateSlugHint();
+      schedulePreviewUpdate();
+    });
     updateSlugHint();
+  }
+
+  if (form) {
+    form.addEventListener('input', () => schedulePreviewUpdate());
+    form.addEventListener('change', () => schedulePreviewUpdate());
   }
 
   form.addEventListener('submit', () => serialize());

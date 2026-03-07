@@ -25,6 +25,7 @@
 }
 
 .media-edit__preview {
+  position: relative;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
   background: rgba(0,0,0,0.18);
@@ -38,6 +39,20 @@
   height: 100%;
   object-fit: scale-down;
   display: block;
+  cursor: crosshair;
+}
+
+.media-edit__focus-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #e74c3c;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: none;
 }
 
 .media-edit__meta {
@@ -68,6 +83,11 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+.media-edit__inline-form {
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
 }
 
 .media-edit__title {

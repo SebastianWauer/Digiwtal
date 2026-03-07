@@ -15,6 +15,337 @@ use App\Setup\EnsureDefaultPages;
 
 final class PagesController
 {
+    public function preview(): void
+    {
+        $user = \admin_require_perm('pages.view');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo 'Method Not Allowed';
+            return;
+        }
+
+        [$rawUser, $rawTheme, $_pdo, $repo] = $this->deps($user);
+        unset($rawUser, $rawTheme);
+
+        $rawBody = (string)file_get_contents('php://input');
+        $data = json_decode($rawBody, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+        if (!is_array($data)) {
+            $data = [];
+        }
+
+        $pageId = (int)($data['id'] ?? 0);
+        $page = $pageId > 0 ? $repo->findById($pageId) : null;
+        if (!is_array($page)) {
+            $page = [
+                'id' => 0,
+                'slug' => (string)($data['slug'] ?? ''),
+                'title' => (string)($data['title'] ?? ''),
+                'frontend_title' => (string)($data['frontend_title'] ?? ''),
+                'subtitle' => (string)($data['subtitle'] ?? ''),
+                'is_home' => !empty($data['is_home']) ? 1 : 0,
+            ];
+        }
+
+        $page['slug'] = (string)($data['slug'] ?? $page['slug'] ?? '');
+        $page['title'] = (string)($data['title'] ?? $page['title'] ?? '');
+        $page['frontend_title'] = (string)($data['frontend_title'] ?? $page['frontend_title'] ?? '');
+        $page['subtitle'] = (string)($data['subtitle'] ?? $page['subtitle'] ?? '');
+        $page['is_home'] = !empty($data['is_home']) ? 1 : (int)($page['is_home'] ?? 0);
+
+        $contentJson = (string)($data['content_json'] ?? '');
+        if ($contentJson === '') {
+            $contentJson = (string)($page['content_json'] ?? '{"blocks":[]}');
+        }
+
+        $decoded = json_decode($contentJson, true);
+        $blocks = [];
+        if (is_array($decoded)) {
+            if (array_is_list($decoded)) {
+                $blocks = $decoded;
+            } elseif (isset($decoded['blocks']) && is_array($decoded['blocks'])) {
+                $blocks = $decoded['blocks'];
+            }
+        }
+        try {
+            $blocks = $this->enrichBlocksWithFocusFromDb($_pdo, $blocks);
+        } catch (\Throwable $e) {
+            // Preview darf nie komplett ausfallen: bei Fehlern ohne Focus-Enrichment weiter rendern.
+            if (\class_exists('FileLogger')) {
+                \FileLogger::channel('cms')->error('preview_enrich_blocks_failed', [
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $seo = [
+            'meta_title'       => (string)($data['seo_meta_title'] ?? ''),
+            'meta_description' => (string)($data['seo_meta_description'] ?? ''),
+            'robots'           => (string)($data['seo_robots'] ?? ''),
+            'canonical_url'    => (string)($data['seo_canonical_url'] ?? ''),
+            'og_title'         => (string)($data['seo_og_title'] ?? ''),
+            'og_description'   => (string)($data['seo_og_description'] ?? ''),
+            'og_image_url'     => (string)($data['seo_og_image_url'] ?? ''),
+        ];
+
+        $settingsRepo = new SiteSettingsRepositoryDb($_pdo);
+        $settings = $settingsRepo->getAll();
+        $siteName = (string)($settings['site_name'] ?? 'Website');
+        $pageTitle = (string)($page['title'] ?? 'Seite');
+        $title = $pageTitle . ' – ' . $siteName;
+        $slug = trim((string)($page['slug'] ?? ''), '/');
+        if ($slug === '') {
+            $slug = 'home';
+        }
+
+        $navItems = [];
+        foreach ($repo->listPublicNav('header') as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $item['area'] = 'header';
+            $navItems[] = $item;
+        }
+        foreach ($repo->listPublicNav('footer') as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $item['area'] = 'footer';
+            $navItems[] = $item;
+        }
+
+        $frontendView = dirname(__DIR__, 3) . '/Frontend/app/view.php';
+        if (!is_file($frontendView)) {
+            http_response_code(500);
+            echo 'Frontend-View-Helper nicht gefunden.';
+            return;
+        }
+
+        require_once $frontendView;
+        if (!function_exists('render')) {
+            http_response_code(500);
+            echo 'Frontend-Renderer nicht verfügbar.';
+            return;
+        }
+
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow');
+
+        ob_start();
+        \render('templates/layout.php', compact('siteName', 'title', 'pageTitle', 'blocks', 'navItems', 'slug', 'seo'));
+        $html = (string)ob_get_clean();
+
+        $frontendBase = rtrim((string)\App\Core\Env::get('FRONTEND_BASE_URL', ''), '/');
+        if ($frontendBase !== '') {
+            $baseTag = '<base href="' . htmlspecialchars($frontendBase . '/', ENT_QUOTES, 'UTF-8') . '">';
+            $patched = preg_replace('/<head(\s*)>/i', '<head$1>' . $baseTag, $html, 1);
+            if (is_string($patched) && $patched !== '') {
+                $html = $patched;
+            }
+        }
+
+        echo $html;
+    }
+
+    private function parseMediaIdFromUrl(string $url): ?int
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return null;
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return null;
+        }
+        $path = (string)($parts['path'] ?? '');
+        if (!in_array($path, ['/media/file', '/media/thumb'], true)) {
+            return null;
+        }
+        $query = (string)($parts['query'] ?? '');
+        if ($query === '') {
+            return null;
+        }
+        parse_str($query, $q);
+        $id = (int)($q['id'] ?? 0);
+        return $id > 0 ? $id : null;
+    }
+
+    private function cmsBaseUrlFromRequest(): string
+    {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host === '') {
+            return '';
+        }
+        return $scheme . '://' . $host;
+    }
+
+    private function absolutizeCmsMediaUrl(string $url, string $cmsBaseUrl): string
+    {
+        $url = trim($url);
+        if ($url === '' || $cmsBaseUrl === '') {
+            return $url;
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return $url;
+        }
+        if (!empty($parts['scheme']) && !empty($parts['host'])) {
+            return $url;
+        }
+        $path = (string)($parts['path'] ?? '');
+        if (!in_array($path, ['/media/file', '/media/thumb'], true)) {
+            return $url;
+        }
+        $query = (string)($parts['query'] ?? '');
+        return rtrim($cmsBaseUrl, '/') . $path . ($query !== '' ? ('?' . $query) : '');
+    }
+
+    private function enrichBlocksWithFocusFromDb(\PDO $pdo, array $blocks): array
+    {
+        $cmsBaseUrl = $this->cmsBaseUrlFromRequest();
+        $mediaIds = [];
+        $collect = function ($value) use (&$collect, &$mediaIds): void {
+            if (!is_array($value)) {
+                return;
+            }
+            foreach ($value as $k => $v) {
+                if (is_array($v)) {
+                    $collect($v);
+                    continue;
+                }
+                $key = (string)$k;
+                if (in_array($key, ['media_id', 'image_media_id', 'poster_media_id'], true)) {
+                    $mid = (int)$v;
+                    if ($mid > 0) {
+                        $mediaIds[$mid] = true;
+                    }
+                    continue;
+                }
+                if (!is_string($v)) {
+                    continue;
+                }
+                if (!in_array($key, ['url', 'image_url', 'poster_url'], true)) {
+                    continue;
+                }
+                $parts = parse_url(trim($v));
+                if (!is_array($parts)) {
+                    continue;
+                }
+                $path = (string)($parts['path'] ?? '');
+                if (!in_array($path, ['/media/file', '/media/thumb'], true)) {
+                    continue;
+                }
+                parse_str((string)($parts['query'] ?? ''), $q);
+                $id = (int)($q['id'] ?? 0);
+                if ($id > 0) {
+                    $mediaIds[$id] = true;
+                }
+            }
+        };
+        $collect($blocks);
+
+        if ($mediaIds === []) {
+            return $blocks;
+        }
+
+        $ids = array_keys($mediaIds);
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $st = $pdo->prepare("SELECT id, focus_x, focus_y FROM media_items WHERE is_deleted = 0 AND id IN ($ph)");
+        foreach ($ids as $i => $id) {
+            $st->bindValue($i + 1, (int)$id, \PDO::PARAM_INT);
+        }
+        $st->execute();
+        $rows = $st->fetchAll(\PDO::FETCH_ASSOC);
+        $focusMap = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) continue;
+            $id = (int)($r['id'] ?? 0);
+            if ($id <= 0) continue;
+            $focusMap[$id] = [
+                'x' => ($r['focus_x'] !== null && $r['focus_x'] !== '') ? (float)$r['focus_x'] : null,
+                'y' => ($r['focus_y'] !== null && $r['focus_y'] !== '') ? (float)$r['focus_y'] : null,
+            ];
+        }
+
+        $apply = function ($value) use (&$apply, $focusMap) {
+            if (!is_array($value)) {
+                return $value;
+            }
+
+            if (array_is_list($value)) {
+                foreach ($value as $i => $item) {
+                    $value[$i] = $apply($item);
+                }
+                return $value;
+            }
+
+            foreach ($value as $k => $v) {
+                if (is_array($v)) {
+                    $value[$k] = $apply($v);
+                    continue;
+                }
+                $key = (string)$k;
+
+                if (in_array($key, ['url', 'image_url', 'poster_url'], true) && is_string($v)) {
+                    $value[$key] = $this->absolutizeCmsMediaUrl($v, $cmsBaseUrl);
+                }
+
+                if (in_array($key, ['media_id', 'image_media_id', 'poster_media_id'], true)) {
+                    $mid = (int)$v;
+                    if ($mid > 0 && isset($focusMap[$mid])) {
+                        $targetField = $key === 'poster_media_id' ? 'poster_url' : 'image_url';
+                        if (!isset($value[$targetField]) || trim((string)$value[$targetField]) === '') {
+                            $value[$targetField] = $this->absolutizeCmsMediaUrl('/media/file?id=' . $mid, $cmsBaseUrl);
+                        }
+                        if ($key === 'media_id' && (!isset($value['url']) || trim((string)$value['url']) === '')) {
+                            $value['url'] = $this->absolutizeCmsMediaUrl('/media/file?id=' . $mid, $cmsBaseUrl);
+                        }
+
+                        if ($focusMap[$mid]['x'] !== null) {
+                            $value[$targetField . '_focus_x'] = $focusMap[$mid]['x'];
+                            if ($key === 'media_id') {
+                                $value['url_focus_x'] = $focusMap[$mid]['x'];
+                            }
+                        }
+                        if ($focusMap[$mid]['y'] !== null) {
+                            $value[$targetField . '_focus_y'] = $focusMap[$mid]['y'];
+                            if ($key === 'media_id') {
+                                $value['url_focus_y'] = $focusMap[$mid]['y'];
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                if (!is_string($v)) {
+                    continue;
+                }
+                if (!in_array($key, ['url', 'image_url', 'poster_url'], true)) {
+                    continue;
+                }
+                $mediaId = $this->parseMediaIdFromUrl($v);
+                if ($mediaId === null || !isset($focusMap[$mediaId])) {
+                    continue;
+                }
+                if ($focusMap[$mediaId]['x'] !== null) {
+                    $value[$key . '_focus_x'] = $focusMap[$mediaId]['x'];
+                }
+                if ($focusMap[$mediaId]['y'] !== null) {
+                    $value[$key . '_focus_y'] = $focusMap[$mediaId]['y'];
+                }
+            }
+            return $value;
+        };
+
+        return $apply($blocks);
+    }
+
     /** @return array{0:array,1:string,2:\PDO,3:PageRepositoryDb,4:PageService} */
     private function deps(array $user): array
     {
@@ -130,6 +461,7 @@ final class PagesController
         $flash = null;
         $revisions = [];
         $selectedRevision = null;
+        $navCandidates = $repo->listActive();
 
         // SEO-Override (nur seitenspezifische Werte) für das Formular laden
         $seoSvc      = new SeoService(new SeoRepositoryDb($_pdo), new SiteSettingsRepositoryDb($_pdo));
@@ -220,6 +552,11 @@ final class PagesController
         $navLabel   = (string)($_POST['nav_label'] ?? '');
         $navArea    = (string)($_POST['nav_area'] ?? 'header');
         $navOrder   = (int)($_POST['nav_order'] ?? 0);
+        $navPlaceMode = (string)($_POST['nav_place_mode'] ?? 'after');
+        if (!in_array($navPlaceMode, ['before', 'after'], true)) {
+            $navPlaceMode = 'after';
+        }
+        $navPlaceRef = (int)($_POST['nav_place_ref'] ?? 0);
 
         $res = $svc->save(
             $id > 0 ? $id : null,
@@ -261,11 +598,16 @@ final class PagesController
                 'og_description'   => $_POST['seo_og_description']   ?? '',
                 'og_image_url'     => $_POST['seo_og_image_url']     ?? '',
             ]);
+
+            if ($navVisible && $navPlaceRef > 0) {
+                $this->reorderNavigation($_pdo, $repo, $id2, $navArea, $navPlaceRef, $navPlaceMode);
+            }
         }
 
         $page = $id2 > 0 ? $repo->findById($id2) : null;
         $revisions = $id2 > 0 ? $repo->listRevisions($id2, 20) : [];
         $selectedRevision = null;
+        $navCandidates = $repo->listActive();
         if (!is_array($page)) {
             $page = [
                 'id'             => 0,
@@ -282,6 +624,8 @@ final class PagesController
                 'nav_label'      => $navLabel,
                 'nav_area'       => $navArea,
                 'nav_order'      => $navOrder,
+                '_nav_place_mode'=> $navPlaceMode,
+                '_nav_place_ref' => $navPlaceRef,
             ];
         }
 
@@ -301,6 +645,56 @@ final class PagesController
 
         require __DIR__ . '/../Views/pages_edit.php';
         \admin_layout_end();
+    }
+
+    private function navAppearsInArea(array $row, string $area): bool
+    {
+        if ((int)($row['is_deleted'] ?? 0) !== 0) return false;
+        if ((int)($row['nav_visible'] ?? 0) !== 1) return false;
+        $a = (string)($row['nav_area'] ?? 'header');
+        return $a === $area || $a === 'both';
+    }
+
+    private function reorderNavigation(
+        \PDO $pdo,
+        PageRepositoryDb $repo,
+        int $pageId,
+        string $navArea,
+        int $refId,
+        string $mode
+    ): void {
+        $baseArea = in_array($navArea, ['header', 'footer'], true) ? $navArea : 'header';
+        $rows = $repo->listActive();
+
+        $ordered = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            if (!$this->navAppearsInArea($row, $baseArea)) continue;
+            $rid = (int)($row['id'] ?? 0);
+            if ($rid > 0) $ordered[] = $rid;
+        }
+
+        $ordered = array_values(array_filter($ordered, static fn(int $id): bool => $id !== $pageId));
+        if (!in_array($pageId, $ordered, true)) {
+            $ordered[] = $pageId;
+        }
+
+        $refPos = array_search($refId, $ordered, true);
+        if ($refPos !== false) {
+            $ordered = array_values(array_filter($ordered, static fn(int $id): bool => $id !== $pageId));
+            $insertPos = ($mode === 'before') ? (int)$refPos : ((int)$refPos + 1);
+            array_splice($ordered, $insertPos, 0, [$pageId]);
+        }
+
+        $upd = $pdo->prepare('UPDATE pages SET nav_order = :nav_order WHERE id = :id LIMIT 1');
+        $n = 10;
+        foreach ($ordered as $rid) {
+            $upd->execute([
+                ':nav_order' => $n,
+                ':id' => $rid,
+            ]);
+            $n += 10;
+        }
     }
 
     public function delete(): void

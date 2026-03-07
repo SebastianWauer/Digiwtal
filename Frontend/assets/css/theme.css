@@ -159,6 +159,10 @@ nav a[aria-current="page"] {
   padding-block: 5rem;
   padding-inline: var(--container-pad);
   background-color: var(--color-dark);
+  min-height: var(--hero-min-height, 55vh);
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 50% 50%;
   color: var(--color-dark-text);
   text-align: center;
   overflow: hidden;
@@ -168,7 +172,7 @@ nav a[aria-current="page"] {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, var(--hero-overlay-opacity, 0.5));
   z-index: 0;
 }
 
@@ -252,7 +256,11 @@ nav a[aria-current="page"] {
 
 .block-image img {
   max-width: 100%;
+  width: 100%;
+  aspect-ratio: 16 / 6;
   height: auto;
+  object-fit: cover;
+  object-position: 50% 50%;
   border-radius: var(--radius-lg);
   margin-inline: auto;
 }

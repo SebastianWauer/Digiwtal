@@ -436,7 +436,7 @@ if ($method === 'GET' && $path === '/api/health') {
     $cmsVersion = (string)(
         $manifest['cms_version'] ??
         $versionCfg['cms_version'] ??
-        '2.1.1'
+        '2.1.2'
     );
 
     // Frontend-Version: Manifest > null
@@ -839,7 +839,7 @@ if (preg_match('/^\/media\/(.+)$/', $sub, $m)) {
     $mediaId = (int)$m[1];
 
     $stmt = $pdo->prepare(
-        "SELECT id, display_filename, mime, size_bytes, width, height, alt_text
+        "SELECT id, display_filename, mime, size_bytes, width, height, alt_text, focus_x, focus_y
          FROM media_items
          WHERE id = :id AND is_deleted = 0"
     );
@@ -861,6 +861,8 @@ if (preg_match('/^\/media\/(.+)$/', $sub, $m)) {
         'width'      => ($row['width'] !== null && $row['width'] !== '') ? (int)$row['width'] : null,
         'height'     => ($row['height'] !== null && $row['height'] !== '') ? (int)$row['height'] : null,
         'alt'        => (string)($row['alt_text'] ?? ''),
+        'focus_x'    => ($row['focus_x'] !== null && $row['focus_x'] !== '') ? (float)$row['focus_x'] : null,
+        'focus_y'    => ($row['focus_y'] !== null && $row['focus_y'] !== '') ? (float)$row['focus_y'] : null,
     ]);
 }
 

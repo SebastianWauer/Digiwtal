@@ -49,6 +49,7 @@ $router->post('/prefs', \App\Controller\UserPrefsController::class, 'handle');
 
 $router->get('/pages', \App\Controller\PagesController::class, 'index');
 $router->get('/pages/edit', \App\Controller\PagesController::class, 'edit');
+$router->post('/pages/preview', \App\Controller\PagesController::class, 'preview');
 $router->post('/pages/save', \App\Controller\PagesController::class, 'save');
 $router->post('/pages/delete', \App\Controller\PagesController::class, 'delete');
 $router->post('/pages/restore', \App\Controller\PagesController::class, 'restore');
@@ -83,6 +84,7 @@ $router->post('/media/delete', \App\Controller\MediaController::class, 'delete')
 $router->post('/media/restore', \App\Controller\MediaController::class, 'restore');
 $router->post('/media/purge', \App\Controller\MediaController::class, 'purge');
 $router->post('/media/move', \App\Controller\MediaController::class, 'move');
+$router->post('/media/rotate', \App\Controller\MediaController::class, 'rotate');
 $router->get('/media/thumb', \App\Controller\MediaController::class, 'thumb');
 $router->get('/media/file', \App\Controller\MediaController::class, 'file');
 

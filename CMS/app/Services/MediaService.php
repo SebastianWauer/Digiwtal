@@ -487,4 +487,118 @@ final class MediaService
         }
         return $this->mediaStorageDir() . '/' . $storage;
     }
+
+    public function rotateStoredMedia(array $row, int $degrees): void
+    {
+        $id = (int)($row['id'] ?? 0);
+        $ext = strtolower((string)($row['ext'] ?? ''));
+        if ($id <= 0) {
+            throw new \RuntimeException('Ungültige Medien-ID.');
+        }
+        if (!in_array($degrees, [90, 180, 270], true)) {
+            throw new \RuntimeException('Ungültiger Rotationswinkel.');
+        }
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            throw new \RuntimeException('Drehen ist nur für JPG, PNG und WebP möglich.');
+        }
+
+        $path = $this->getStoragePathForMedia($row);
+        if ($path === '' || !is_file($path)) {
+            throw new \RuntimeException('Datei wurde nicht gefunden.');
+        }
+
+        $src = null;
+        if (in_array($ext, ['jpg', 'jpeg'], true)) {
+            if (!function_exists('imagecreatefromjpeg')) {
+                throw new \RuntimeException('GD JPEG-Unterstützung fehlt.');
+            }
+            $src = @imagecreatefromjpeg($path);
+        } elseif ($ext === 'png') {
+            if (!function_exists('imagecreatefrompng')) {
+                throw new \RuntimeException('GD PNG-Unterstützung fehlt.');
+            }
+            $src = @imagecreatefrompng($path);
+        } else {
+            if (!function_exists('imagecreatefromwebp')) {
+                throw new \RuntimeException('GD WebP-Unterstützung fehlt.');
+            }
+            $src = @imagecreatefromwebp($path);
+        }
+
+        if (!is_resource($src) && !($src instanceof \GdImage)) {
+            throw new \RuntimeException('Bild konnte nicht gelesen werden.');
+        }
+
+        // imagerotate rotiert gegen den Uhrzeigersinn.
+        $angle = match ($degrees) {
+            90 => -90,
+            180 => 180,
+            default => 90,
+        };
+
+        $bg = imagecolorallocatealpha($src, 0, 0, 0, 127);
+        $rotated = @imagerotate($src, $angle, $bg);
+        imagedestroy($src);
+
+        if (!is_resource($rotated) && !($rotated instanceof \GdImage)) {
+            throw new \RuntimeException('Bild konnte nicht gedreht werden.');
+        }
+
+        if ($ext === 'png' || $ext === 'webp') {
+            imagealphablending($rotated, false);
+            imagesavealpha($rotated, true);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'rot_');
+        if ($tmp === false) {
+            imagedestroy($rotated);
+            throw new \RuntimeException('Temporäre Datei konnte nicht erstellt werden.');
+        }
+
+        $ok = false;
+        if (in_array($ext, ['jpg', 'jpeg'], true)) {
+            $ok = imagejpeg($rotated, $tmp, 88);
+        } elseif ($ext === 'png') {
+            $ok = imagepng($rotated, $tmp, 6);
+        } else {
+            $ok = imagewebp($rotated, $tmp, 82);
+        }
+
+        imagedestroy($rotated);
+
+        if (!$ok) {
+            @unlink($tmp);
+            throw new \RuntimeException('Gedrehtes Bild konnte nicht gespeichert werden.');
+        }
+
+        if (!@copy($tmp, $path)) {
+            @unlink($tmp);
+            throw new \RuntimeException('Datei konnte nicht aktualisiert werden.');
+        }
+        @chmod($path, 0644);
+
+        $dim = @getimagesize($path);
+        $w = is_array($dim) ? (int)($dim[0] ?? 0) : 0;
+        $h = is_array($dim) ? (int)($dim[1] ?? 0) : 0;
+        $bytes = (int)@filesize($path);
+        if ($bytes < 0) $bytes = 0;
+
+        $st = $this->pdo->prepare("
+            UPDATE media_items
+            SET width = :w,
+                height = :h,
+                size_bytes = :sb,
+                updated_at = NOW()
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $st->execute([
+            ':w' => $w > 0 ? $w : null,
+            ':h' => $h > 0 ? $h : null,
+            ':sb' => $bytes,
+            ':id' => $id,
+        ]);
+
+        @unlink($tmp);
+    }
 }

@@ -535,6 +535,48 @@ final class MediaController
         $this->json(200, ['ok' => true]);
     }
 
+    public function rotate(): void
+    {
+        $user = \admin_require_perm('media.edit');
+        [$user, $_theme, $_pdo, $mediaRepo, $_folderRepo, $_usageRepo, $service] = $this->deps($user);
+
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+            http_response_code(405);
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Method Not Allowed'];
+            header('Location: /media');
+            exit;
+        }
+
+        \admin_verify_csrf();
+
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ungültige Medien-ID.'];
+            header('Location: /media');
+            exit;
+        }
+
+        $direction = strtolower(trim((string)($_POST['direction'] ?? 'cw')));
+        $degrees = $direction === 'ccw' ? 270 : 90;
+
+        $row = $mediaRepo->findById($id);
+        if (!$row || (int)($row['is_deleted'] ?? 0) === 1) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Medium nicht gefunden.'];
+            header('Location: /media');
+            exit;
+        }
+
+        try {
+            $service->rotateStoredMedia($row, $degrees);
+            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Bild erfolgreich gedreht.'];
+        } catch (\Throwable $e) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => $e->getMessage()];
+        }
+
+        header('Location: /media/edit?id=' . $id);
+        exit;
+    }
+
     public function file(): void
     {
         $user = \admin_require_login();
