@@ -60,6 +60,9 @@ final class ThemeEngine
         $settings = (new SiteSettingsRepositoryDb($pdo))->getAll();
         $faviconMediaId = (int)($settings['favicon_media_id'] ?? 0);
         $faviconUrl = $faviconMediaId > 0 ? ('/media/file?id=' . $faviconMediaId) : '';
+        $brandPrimary = $this->normalizeHex((string)($settings['brand_color_primary'] ?? ''), '#2563eb');
+        $brandSecondary = $this->normalizeHex((string)($settings['brand_color_secondary'] ?? ''), $brandPrimary);
+        $brandTertiary = $this->normalizeHex((string)($settings['brand_color_tertiary'] ?? ''), '#f59e0b');
 
         $renderer  = new BlockRenderer();
         $themeRoot = dirname(__DIR__, 3) . '/Frontend/themes/default';
@@ -73,6 +76,19 @@ final class ThemeEngine
 
         // Verfügbar in layout.php: $page, $blocks, $seo, $nav, $renderer, $themeRoot
         require $layout;
+    }
+
+    private function normalizeHex(string $color, string $fallback): string
+    {
+        $color = trim($color);
+        if (preg_match('/^#([0-9a-fA-F]{3})$/', $color, $m) === 1) {
+            $r = $m[1][0]; $g = $m[1][1]; $b = $m[1][2];
+            $color = '#' . $r . $r . $g . $g . $b . $b;
+        }
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1) {
+            return strtolower($color);
+        }
+        return $fallback;
     }
 
     private function notFound(): void

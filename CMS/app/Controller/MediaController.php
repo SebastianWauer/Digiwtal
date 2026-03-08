@@ -579,41 +579,27 @@ final class MediaController
 
     public function file(): void
     {
-        $user = \admin_require_login();
-
         $id = (int)($_GET['id'] ?? 0);
         if ($id <= 0) {
             http_response_code(404);
             echo 'Not Found';
             return;
         }
-        if (!\admin_can('media.view')) {
-            try {
-                $pdo = db();
-                $stmt = $pdo->prepare("
-                    SELECT 1
-                    FROM site_settings
-                    WHERE `key` IN ('cms_logo_light_media_id','cms_logo_dark_media_id','favicon_media_id')
-                      AND `value` = :id
-                    LIMIT 1
-                ");
-                $stmt->execute([':id' => (string)$id]);
-                $ok = (bool)$stmt->fetchColumn();
-            } catch (\Throwable $e) {
-                $ok = false;
-            }
 
-            if (!$ok) {
-                http_response_code(403);
-                echo 'Forbidden';
-                return;
-            }
-        }
-
-        [$user, $_theme, $_pdo, $mediaRepo, $_folderRepo, $_usageRepo, $service] = $this->deps($user);
+        $pdo = \admin_pdo();
+        $mediaRepo = new MediaRepositoryDb($pdo);
+        $folderRepo = new MediaFolderRepositoryDb($pdo);
+        $service = new MediaService($pdo, $mediaRepo, $folderRepo);
 
         $row = $mediaRepo->findById($id);
-        if (!$row || (int)($row['is_deleted'] ?? 0) === 1) {
+        if (!$row) {
+            http_response_code(404);
+            echo 'Not Found';
+            return;
+        }
+
+        $isDeleted = ((int)($row['is_deleted'] ?? 0) === 1);
+        if ($isDeleted && !\admin_can('media.delete')) {
             http_response_code(404);
             echo 'Not Found';
             return;
@@ -648,15 +634,17 @@ final class MediaController
 
     public function thumb(): void
     {
-        $user = \admin_require_login();
-        [$user, $_theme, $_pdo, $mediaRepo, $_folderRepo, $_usageRepo, $service] = $this->deps($user);
-
         $id = (int)($_GET['id'] ?? 0);
         if ($id <= 0) {
             http_response_code(404);
             echo 'Not Found';
             return;
         }
+
+        $pdo = \admin_pdo();
+        $mediaRepo = new MediaRepositoryDb($pdo);
+        $folderRepo = new MediaFolderRepositoryDb($pdo);
+        $service = new MediaService($pdo, $mediaRepo, $folderRepo);
 
         $row = $mediaRepo->findById($id);
         if (!$row) {
@@ -669,12 +657,6 @@ final class MediaController
 
         if ($isDeleted) {
             if (!\admin_can('media.delete')) {
-                http_response_code(404);
-                echo 'Not Found';
-                return;
-            }
-        } else {
-            if (!\admin_can('media.view')) {
                 http_response_code(404);
                 echo 'Not Found';
                 return;

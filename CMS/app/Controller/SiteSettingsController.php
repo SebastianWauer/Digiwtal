@@ -63,6 +63,9 @@ final class SiteSettingsController
         $repo->set('cms_logo_light_media_id', trim((string)($_POST['cms_logo_light_media_id'] ?? '')) ?: null);
         $repo->set('cms_logo_dark_media_id', trim((string)($_POST['cms_logo_dark_media_id'] ?? '')) ?: null);
         $repo->set('favicon_media_id', trim((string)($_POST['favicon_media_id'] ?? '')) ?: null);
+        $repo->set('brand_color_primary', trim((string)($_POST['brand_color_primary'] ?? '')));
+        $repo->set('brand_color_secondary', trim((string)($_POST['brand_color_secondary'] ?? '')));
+        $repo->set('brand_color_tertiary', trim((string)($_POST['brand_color_tertiary'] ?? '')));
 
         $repo->set('contact_name', trim((string)($_POST['contact_name'] ?? '')));
         $repo->set('contact_email', trim((string)($_POST['contact_email'] ?? '')));

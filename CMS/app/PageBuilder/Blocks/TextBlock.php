@@ -13,6 +13,7 @@ final class TextBlock extends AbstractBlockType
         return [
             'title'          => '',
             'subtitle'       => '',
+            'intro'          => '',
             'image_url'      => '',
             'image_size'     => 'm',
             'image_position' => 'right',
@@ -31,7 +32,12 @@ final class TextBlock extends AbstractBlockType
             ],
             'subtitle' => [
                 'type' => 'string', 'max' => 500,
-                'label' => 'Untertitel', 'control' => 'textarea', 'rows' => 3,
+                'label' => 'Untertitel', 'control' => 'input',
+            ],
+            'intro' => [
+                'type' => 'string', 'max' => 700,
+                'label' => 'Einleitung', 'control' => 'input',
+                'hint' => 'Wird im Frontend fett dargestellt.',
             ],
             'image_url' => [
                 'type' => 'string', 'max' => 2000,

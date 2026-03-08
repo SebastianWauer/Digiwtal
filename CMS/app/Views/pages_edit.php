@@ -1026,14 +1026,23 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
     let val = '';
     if (block.data && typeof block.data[key] === 'string') val = block.data[key];
     else if (defs[block.type] && defs[block.type].defaults && typeof defs[block.type].defaults[key] === 'string') val = defs[block.type].defaults[key];
-    if (key === 'image_url' && String(val).trim() === '' && block && block.data && block.data.media_id !== undefined) {
-      const fallbackUrl = mediaFileUrlFromId(block.data.media_id);
-      if (fallbackUrl !== '') val = fallbackUrl;
+    const isImageUrlField = key === 'image_url' || /_image_url$/.test(key);
+    if (isImageUrlField && String(val).trim() === '' && block && block.data) {
+      if (key === 'image_url' && block.data.media_id !== undefined) {
+        const fallbackUrl = mediaFileUrlFromId(block.data.media_id);
+        if (fallbackUrl !== '') val = fallbackUrl;
+      } else if (/_image_url$/.test(key)) {
+        const mediaKey = key.replace(/_image_url$/, '_media_id');
+        if (block.data[mediaKey] !== undefined) {
+          const fallbackUrl = mediaFileUrlFromId(block.data[mediaKey]);
+          if (fallbackUrl !== '') val = fallbackUrl;
+        }
+      }
     }
 
     let input;
 
-    if (key === 'image_url') {
+    if (isImageUrlField) {
       input = el('input', {class: 'pages-edit-input', type: 'text', placeholder: '/media/file?id=123'});
       input.value = val;
       input.readOnly = true;
@@ -1076,7 +1085,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
         serialize();
       });
     } else if (control === 'textarea') {
-      const useWordEditor = key === 'text' || key === 'html' || block.type === 'text';
+      const useWordEditor = key === 'text' || key === 'html';
       if (useWordEditor) {
         input = createWordLikeEditor(val, (html) => {
           if (!CAN_EDIT) return;
@@ -1146,7 +1155,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       });
     }
 
-    if (key !== 'image_url') {
+    if (!isImageUrlField) {
       fieldWrap.appendChild(input);
     }
     if (hintText) fieldWrap.appendChild(el('div', {class: 'pages-edit-field-hint', html: hintText}));
@@ -1158,6 +1167,203 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
     const fields = def.fields || {};
     const wrapper = el('div', {class: 'pages-edit-fields'});
     Object.keys(fields).forEach(key => wrapper.appendChild(renderField(block, key, fields[key])));
+    return wrapper;
+  }
+
+  function renderTextBlockFields(block) {
+    const fields = (defs.text && defs.text.fields && typeof defs.text.fields === 'object') ? defs.text.fields : {};
+    const wrapper = el('div', {class: 'pages-edit-block-tabs'});
+    const tabBar = el('div', {class: 'pages-edit-block-tabs__bar'});
+    const panelWrap = el('div', {class: 'pages-edit-block-tabs__panels'});
+
+    const contentKeys = ['title', 'subtitle', 'intro', 'text'];
+    const imageKeys = ['image_url', 'image_size', 'image_position', 'image_caption', 'image_credit', 'media_id', 'focus_x', 'focus_y'];
+
+    const known = new Set([...contentKeys, ...imageKeys]);
+    const remaining = Object.keys(fields).filter((k) => !known.has(k));
+    if (remaining.length > 0) {
+      contentKeys.push(...remaining);
+    }
+
+    const tabs = [
+      { id: 'content', label: 'Inhalt', keys: contentKeys },
+      { id: 'image', label: 'Bild', keys: imageKeys },
+    ];
+
+    const buttons = [];
+    const panels = [];
+
+    const activateTab = (id) => {
+      buttons.forEach((btn) => {
+        const active = btn.dataset.tab === id;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach((panel) => {
+        const show = panel.dataset.tab === id;
+        panel.classList.toggle('is-active', show);
+        panel.hidden = !show;
+      });
+    };
+
+    tabs.forEach((tab) => {
+      const btn = el('button', {
+        type: 'button',
+        class: 'pages-edit-block-tabbtn',
+        html: tab.label,
+      });
+      btn.dataset.tab = tab.id;
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', 'false');
+      btn.addEventListener('click', () => activateTab(tab.id));
+      buttons.push(btn);
+      tabBar.appendChild(btn);
+
+      const panel = el('section', {class: 'pages-edit-block-tabpanel'});
+      panel.dataset.tab = tab.id;
+      panel.setAttribute('role', 'tabpanel');
+      panel.hidden = true;
+
+      const panelFields = el('div', {class: 'pages-edit-fields'});
+      tab.keys.forEach((key) => {
+        if (!fields[key]) return;
+        try {
+          panelFields.appendChild(renderField(block, key, fields[key]));
+        } catch (e) {
+          console.error('Text field render failed:', key, e);
+        }
+      });
+
+      if (!panelFields.children.length) {
+        panelFields.appendChild(el('div', {
+          class: 'pages-edit-field-hint',
+          html: 'Für diesen Bereich sind aktuell keine Felder konfiguriert.'
+        }));
+      }
+
+      panel.appendChild(panelFields);
+      panels.push(panel);
+      panelWrap.appendChild(panel);
+    });
+
+    wrapper.appendChild(tabBar);
+    wrapper.appendChild(panelWrap);
+    activateTab('content');
+    return wrapper;
+  }
+
+  function renderColumnsBlockFields(block) {
+    const fields = (defs.columns && defs.columns.fields && typeof defs.columns.fields === 'object') ? defs.columns.fields : {};
+    const wrapper = el('div', {class: 'pages-edit-block-tabs'});
+    const tabBar = el('div', {class: 'pages-edit-block-tabs__bar'});
+    const panelWrap = el('div', {class: 'pages-edit-block-tabs__panels'});
+    const buttons = [];
+    const panels = [];
+
+    const activateTab = (id) => {
+      buttons.forEach((btn) => {
+        const active = btn.dataset.tab === id && !btn.hidden;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach((panel) => {
+        const show = panel.dataset.tab === id && !panel.hidden;
+        panel.classList.toggle('is-active', show);
+      });
+    };
+
+    const settingsBtn = el('button', {
+      type: 'button',
+      class: 'pages-edit-block-tabbtn',
+      html: 'Einstellungen',
+    });
+    settingsBtn.dataset.tab = 'settings';
+    settingsBtn.setAttribute('role', 'tab');
+    settingsBtn.setAttribute('aria-selected', 'false');
+    settingsBtn.addEventListener('click', () => activateTab('settings'));
+    buttons.push(settingsBtn);
+    tabBar.appendChild(settingsBtn);
+
+    const settingsPanel = el('section', {class: 'pages-edit-block-tabpanel'});
+    settingsPanel.dataset.tab = 'settings';
+    settingsPanel.setAttribute('role', 'tabpanel');
+    const settingsFields = el('div', {class: 'pages-edit-fields'});
+    if (fields.title) {
+      settingsFields.appendChild(renderField(block, 'title', fields.title));
+    }
+    if (fields.col_count) {
+      settingsFields.appendChild(renderField(block, 'col_count', fields.col_count));
+    }
+    settingsPanel.appendChild(settingsFields);
+    panels.push(settingsPanel);
+    panelWrap.appendChild(settingsPanel);
+
+    for (let i = 1; i <= 5; i++) {
+      const titleKey = `col_${i}_title`;
+      const imageKey = `col_${i}_image_url`;
+      const textKey = `col_${i}_text`;
+      if (!fields[titleKey] && !fields[imageKey] && !fields[textKey]) continue;
+
+      const btn = el('button', {
+        type: 'button',
+        class: 'pages-edit-block-tabbtn',
+        html: `Kachel ${i}`,
+      });
+      btn.dataset.tab = `tile-${i}`;
+      btn.dataset.colIndex = String(i);
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', 'false');
+      btn.addEventListener('click', () => activateTab(`tile-${i}`));
+      buttons.push(btn);
+      tabBar.appendChild(btn);
+
+      const panel = el('section', {class: 'pages-edit-block-tabpanel'});
+      panel.dataset.tab = `tile-${i}`;
+      panel.dataset.colIndex = String(i);
+      panel.setAttribute('role', 'tabpanel');
+      const panelFields = el('div', {class: 'pages-edit-fields'});
+      if (fields[titleKey]) panelFields.appendChild(renderField(block, titleKey, fields[titleKey]));
+      if (fields[imageKey]) panelFields.appendChild(renderField(block, imageKey, fields[imageKey]));
+      if (fields[textKey]) panelFields.appendChild(renderField(block, textKey, fields[textKey]));
+      panel.appendChild(panelFields);
+      panels.push(panel);
+      panelWrap.appendChild(panel);
+    }
+
+    const getColCount = () => {
+      const raw = String(block && block.data ? (block.data.col_count ?? '2') : '2');
+      let count = Number.parseInt(raw, 10);
+      if (!Number.isFinite(count)) count = 2;
+      if (count < 1) count = 1;
+      if (count > 5) count = 5;
+      return count;
+    };
+
+    const updateColumnsTabs = () => {
+      const count = getColCount();
+      buttons.forEach((btn) => {
+        const idx = Number.parseInt(btn.dataset.colIndex || '', 10);
+        if (!Number.isFinite(idx)) return;
+        btn.hidden = idx > count;
+      });
+      panels.forEach((panel) => {
+        const idx = Number.parseInt(panel.dataset.colIndex || '', 10);
+        if (!Number.isFinite(idx)) return;
+        panel.hidden = idx > count;
+      });
+
+      const activeBtn = buttons.find((b) => b.classList.contains('is-active') && !b.hidden);
+      if (!activeBtn) {
+        activateTab('settings');
+      }
+    };
+
+    wrapper.appendChild(tabBar);
+    wrapper.appendChild(panelWrap);
+    wrapper.addEventListener('input', updateColumnsTabs);
+    wrapper.addEventListener('change', updateColumnsTabs);
+    updateColumnsTabs();
+    activateTab('settings');
     return wrapper;
   }
 
@@ -1371,13 +1577,25 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       blockModalTitle.textContent = `${blockLabel(block.type)} bearbeiten`;
     }
     if (blockModalSub) {
-      blockModalSub.textContent = block.type === 'hero'
-        ? 'Hero-Block: Fokus auf Titelbild, Typografie und Einstieg'
-        : `Typ: ${block.type}`;
+      if (block.type === 'hero') {
+        blockModalSub.textContent = 'Hero-Block: Fokus auf Titelbild, Typografie und Einstieg';
+      } else if (block.type === 'text') {
+        blockModalSub.textContent = 'Text-Block: Inhalte und Bild sind in getrennten Kacheln';
+      } else if (block.type === 'columns') {
+        blockModalSub.textContent = 'Spalten-Block: Anzahl und Inhalte der Kacheln';
+      } else {
+        blockModalSub.textContent = `Typ: ${block.type}`;
+      }
     }
     blockModalFields.innerHTML = '';
     try {
-      blockModalFields.appendChild(block.type === 'hero' ? renderHeroBlockFields(block) : renderBlockFields(block));
+      blockModalFields.appendChild(
+        block.type === 'hero'
+          ? renderHeroBlockFields(block)
+          : (block.type === 'text'
+            ? renderTextBlockFields(block)
+            : (block.type === 'columns' ? renderColumnsBlockFields(block) : renderBlockFields(block)))
+      );
     } catch (err) {
       console.error('Block-Editor konnte nicht vollständig geladen werden:', err);
       blockModalFields.innerHTML = '';

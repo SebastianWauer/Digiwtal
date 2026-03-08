@@ -11,26 +11,46 @@ final class ColumnsBlock extends AbstractBlockType
     public function defaults(): array
     {
         return [
+            'title'       => '',
             'col_count'   => '2',
             'col_1_title' => '',
+            'col_1_image_url' => '',
             'col_1_text'  => '',
             'col_2_title' => '',
+            'col_2_image_url' => '',
             'col_2_text'  => '',
             'col_3_title' => '',
+            'col_3_image_url' => '',
             'col_3_text'  => '',
+            'col_4_title' => '',
+            'col_4_image_url' => '',
+            'col_4_text'  => '',
+            'col_5_title' => '',
+            'col_5_image_url' => '',
+            'col_5_text'  => '',
         ];
     }
 
     public function fields(): array
     {
         return [
-            'col_count'   => ['type' => 'string', 'max' => 1,    'label' => 'Spaltenanzahl',  'control' => 'select', 'enum' => ['2', '3']],
-            'col_1_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 1 – Titel', 'control' => 'input'],
-            'col_1_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 1 – Text',  'control' => 'textarea', 'rows' => 4],
-            'col_2_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 2 – Titel', 'control' => 'input'],
-            'col_2_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 2 – Text',  'control' => 'textarea', 'rows' => 4],
-            'col_3_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 3 – Titel', 'control' => 'input'],
-            'col_3_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 3 – Text',  'control' => 'textarea', 'rows' => 4],
+            'title'       => ['type' => 'string', 'max' => 200,  'label' => 'Titel',           'control' => 'input'],
+            'col_count'   => ['type' => 'string', 'max' => 1,    'label' => 'Spaltenanzahl',    'control' => 'select', 'enum' => ['1', '2', '3', '4', '5']],
+            'col_1_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 1 - Titel', 'control' => 'input'],
+            'col_1_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 1 - Bild', 'control' => 'input'],
+            'col_1_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 1 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_2_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 2 - Titel', 'control' => 'input'],
+            'col_2_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 2 - Bild', 'control' => 'input'],
+            'col_2_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 2 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_3_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 3 - Titel', 'control' => 'input'],
+            'col_3_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 3 - Bild', 'control' => 'input'],
+            'col_3_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 3 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_4_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 4 - Titel', 'control' => 'input'],
+            'col_4_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 4 - Bild', 'control' => 'input'],
+            'col_4_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 4 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_5_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 5 - Titel', 'control' => 'input'],
+            'col_5_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 5 - Bild', 'control' => 'input'],
+            'col_5_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 5 - Text',  'control' => 'textarea', 'rows' => 4],
         ];
     }
 
@@ -38,14 +58,15 @@ final class ColumnsBlock extends AbstractBlockType
     {
         $clean = parent::validate($data);
 
-        if (!in_array($clean['col_count'] ?? '', ['2', '3'], true)) {
+        if (!in_array($clean['col_count'] ?? '', ['1', '2', '3', '4', '5'], true)) {
             $clean['col_count'] = '2';
         }
 
-        // Dritte Spalte leer setzen wenn 2-spaltig
-        if ($clean['col_count'] === '2') {
-            $clean['col_3_title'] = '';
-            $clean['col_3_text']  = '';
+        $count = (int)$clean['col_count'];
+        for ($i = max(1, $count + 1); $i <= 5; $i++) {
+            $clean["col_{$i}_title"] = '';
+            $clean["col_{$i}_image_url"] = '';
+            $clean["col_{$i}_text"]  = '';
         }
 
         return $clean;

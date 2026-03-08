@@ -867,6 +867,72 @@ html[data-theme="dark"] .pages-edit-hero-tabpanel .pages-edit-textarea{
   background: #0b0f15;
 }
 
+.pages-edit-block-tabs{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.pages-edit-block-tabs__bar{
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  width: fit-content;
+}
+
+.pages-edit-block-tabbtn{
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.pages-edit-block-tabbtn.is-active{
+  background: color-mix(in srgb, var(--outline) 22%, transparent);
+  color: var(--text);
+}
+
+.pages-edit-block-tabs__panels{
+  border: 1px solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 72%, var(--card) 28%);
+  padding: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.pages-edit-block-tabpanel{
+  display: none;
+}
+
+.pages-edit-block-tabpanel.is-active{
+  display: block;
+}
+
+.pages-edit-block-tabpanel .pages-edit-fields{
+  gap: 10px;
+}
+
+html[data-theme="dark"] .pages-edit-block-tabs__bar{
+  background: #0f131a;
+  border-color: rgba(255,255,255,.12);
+}
+
+html[data-theme="dark"] .pages-edit-block-tabs__panels{
+  background: #0f131a;
+  border-color: rgba(255,255,255,.12);
+}
+
 .pages-edit-modal__close{
   position: absolute;
   top: 8px;
@@ -910,6 +976,10 @@ html[data-theme="dark"] .pages-edit-hero-tabpanel .pages-edit-textarea{
     height: calc(100vh - 16px);
   }
   .pages-edit-hero-tabs__bar{
+    width: 100%;
+    justify-content: space-between;
+  }
+  .pages-edit-block-tabs__bar{
     width: 100%;
     justify-content: space-between;
   }

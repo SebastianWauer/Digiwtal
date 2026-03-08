@@ -125,7 +125,7 @@ function validate_hex_color(string $color, string $default): string
  */
 function get_public_settings(PDO $pdo): array
 {
-    $keys = ['site_title', 'brand_color_primary', 'brand_color_secondary', 'brand_color_tertiary', 'logo_url', 'favicon_media_id'];
+    $keys = ['site_title', 'brand_color_primary', 'brand_color_secondary', 'brand_color_tertiary', 'logo_url', 'favicon_media_id', 'cms_logo_light_media_id', 'cms_logo_dark_media_id'];
     $in   = implode(', ', array_fill(0, count($keys), '?'));
     $stmt = $pdo->prepare("SELECT `key`, `value` FROM site_settings WHERE `key` IN ({$in})");
     $stmt->execute($keys);
@@ -138,6 +138,10 @@ function get_public_settings(PDO $pdo): array
 
     $faviconId = (int)($raw['favicon_media_id'] ?? 0);
     $faviconUrl = $faviconId > 0 ? ('/media/file?id=' . $faviconId) : null;
+    $cmsLogoLightId = (int)($raw['cms_logo_light_media_id'] ?? 0);
+    $cmsLogoLightUrl = $cmsLogoLightId > 0 ? ('/media/file?id=' . $cmsLogoLightId) : null;
+    $cmsLogoDarkId = (int)($raw['cms_logo_dark_media_id'] ?? 0);
+    $cmsLogoDarkUrl = $cmsLogoDarkId > 0 ? ('/media/file?id=' . $cmsLogoDarkId) : null;
 
     return [
         'site_name'             => (string)($raw['site_title'] ?? ''),
@@ -145,6 +149,8 @@ function get_public_settings(PDO $pdo): array
         'brand_color_secondary' => validate_hex_color($raw['brand_color_secondary'] ?? '', '#64748b'),
         'brand_color_tertiary'  => validate_hex_color($raw['brand_color_tertiary']  ?? '', '#f59e0b'),
         'logo_url'              => (isset($raw['logo_url']) && $raw['logo_url'] !== '') ? $raw['logo_url'] : null,
+        'cms_logo_light_url'    => $cmsLogoLightUrl,
+        'cms_logo_dark_url'     => $cmsLogoDarkUrl,
         'favicon_url'           => $faviconUrl,
     ];
 }
@@ -709,6 +715,8 @@ if ($method === 'GET' && $sub === '/pages') {
             p.id,
             p.slug,
             p.title,
+            p.frontend_title,
+            p.subtitle,
             p.status,
             sm.meta_title,
             sm.meta_description,
@@ -739,6 +747,8 @@ if ($method === 'GET' && $sub === '/pages') {
             'id' => (int)$row['id'],
             'slug' => (string)$row['slug'],
             'title' => (string)($row['title'] ?? ''),
+            'frontend_title' => (string)($row['frontend_title'] ?? ''),
+            'subtitle' => (string)($row['subtitle'] ?? ''),
             'status' => (string)($row['status'] ?? ''),
             'meta_title' => (string)($row['meta_title'] ?? ''),
             'meta_description' => (string)($row['meta_description'] ?? ''),
@@ -789,6 +799,8 @@ if (preg_match('/^\/pages\/(.+)$/', $sub, $m)) {
             p.id,
             p.slug,
             p.title,
+            p.frontend_title,
+            p.subtitle,
             sm.meta_title,
             sm.meta_description,
             p.content_json,
@@ -823,6 +835,8 @@ if (preg_match('/^\/pages\/(.+)$/', $sub, $m)) {
         'id'         => (int)$row['id'],
         'slug'       => ltrim((string)$row['slug'], '/'),
         'title'      => (string)($row['title'] ?? ''),
+        'frontend_title' => (string)($row['frontend_title'] ?? ''),
+        'subtitle'   => (string)($row['subtitle'] ?? ''),
         'seo'        => [
             'title'       => (string)($row['meta_title'] ?? ''),
             'description' => (string)($row['meta_description'] ?? ''),
