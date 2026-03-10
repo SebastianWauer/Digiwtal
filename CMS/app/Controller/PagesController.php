@@ -8,6 +8,7 @@ use App\Repositories\MediaRepositoryDb;
 use App\Repositories\MediaUsageRepositoryDb;
 use App\Repositories\SeoRepositoryDb;
 use App\Repositories\SiteSettingsRepositoryDb;
+use App\Repositories\EventCategoryRepositoryDb;
 use App\Services\PageService;
 use App\Services\MediaUsageService;
 use App\Services\SeoService;
@@ -72,6 +73,7 @@ final class PagesController
         }
         try {
             $blocks = $this->enrichBlocksWithFocusFromDb($_pdo, $blocks);
+            $blocks = $this->enrichBlocksWithEventsFromDb($_pdo, $blocks);
         } catch (\Throwable $e) {
             // Preview darf nie komplett ausfallen: bei Fehlern ohne Focus-Enrichment weiter rendern.
             if (\class_exists('FileLogger')) {
@@ -93,29 +95,23 @@ final class PagesController
 
         $settingsRepo = new SiteSettingsRepositoryDb($_pdo);
         $settings = $settingsRepo->getAll();
-        $siteName = (string)($settings['site_name'] ?? 'Website');
-        $pageTitle = (string)($page['title'] ?? 'Seite');
-        $title = $pageTitle . ' – ' . $siteName;
+        $siteName = (string)($settings['site_title'] ?? $settings['site_name'] ?? 'Website');
+        $pageTitle = trim((string)($page['frontend_title'] ?? ''));
+        if ($pageTitle === '') {
+            $pageTitle = (string)($page['title'] ?? 'Seite');
+        }
+        $pageSubtitle = trim((string)($page['subtitle'] ?? ''));
+        $internalTitle = trim((string)($page['title'] ?? ''));
+        if ($internalTitle === '') {
+            $internalTitle = $pageTitle;
+        }
+        $title = $internalTitle . ' - ' . $siteName;
         $slug = trim((string)($page['slug'] ?? ''), '/');
         if ($slug === '') {
             $slug = 'home';
         }
 
-        $navItems = [];
-        foreach ($repo->listPublicNav('header') as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $item['area'] = 'header';
-            $navItems[] = $item;
-        }
-        foreach ($repo->listPublicNav('footer') as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $item['area'] = 'footer';
-            $navItems[] = $item;
-        }
+        $navItems = $this->buildPreviewNavigationItems($_pdo);
 
         $frontendView = dirname(__DIR__, 3) . '/Frontend/app/view.php';
         if (!is_file($frontendView)) {
@@ -127,7 +123,7 @@ final class PagesController
         require_once $frontendView;
         if (!function_exists('render')) {
             http_response_code(500);
-            echo 'Frontend-Renderer nicht verfügbar.';
+            echo 'Frontend-Renderer nicht verfÃ¼gbar.';
             return;
         }
 
@@ -135,21 +131,55 @@ final class PagesController
         header('Cache-Control: no-store, no-cache, must-revalidate');
         header('Pragma: no-cache');
         header('X-Robots-Tag: noindex, nofollow');
-
-        ob_start();
-        \render('templates/layout.php', compact('siteName', 'title', 'pageTitle', 'blocks', 'navItems', 'slug', 'seo'));
-        $html = (string)ob_get_clean();
-
-        $frontendBase = rtrim((string)\App\Core\Env::get('FRONTEND_BASE_URL', ''), '/');
-        if ($frontendBase !== '') {
-            $baseTag = '<base href="' . htmlspecialchars($frontendBase . '/', ENT_QUOTES, 'UTF-8') . '">';
-            $patched = preg_replace('/<head(\s*)>/i', '<head$1>' . $baseTag, $html, 1);
-            if (is_string($patched) && $patched !== '') {
-                $html = $patched;
-            }
+        $cmsBaseUrl = $this->cmsBaseUrlFromRequest();
+        $faviconMediaId = (int)($settings['favicon_media_id'] ?? 0);
+        $faviconUrl = $faviconMediaId > 0
+            ? $this->absolutizeCmsMediaUrl('/media/file?id=' . $faviconMediaId, $cmsBaseUrl)
+            : '';
+        $logoId = (int)($settings['cms_logo_light_media_id'] ?? 0);
+        if ($logoId <= 0) {
+            $logoId = (int)($settings['logo_media_id'] ?? 0);
         }
+        $headerLogoUrl = $logoId > 0
+            ? $this->absolutizeCmsMediaUrl('/media/file?id=' . $logoId, $cmsBaseUrl)
+            : '';
+        $assetBaseUrl = rtrim((string)\App\Core\Env::get('FRONTEND_BASE_URL', ''), '/');
+        $previewMainOnly = true;
 
-        echo $html;
+        try {
+            ob_start();
+            render('themes/default/layout.php', compact(
+                'siteName',
+                'title',
+                'pageTitle',
+                'pageSubtitle',
+                'blocks',
+                'navItems',
+                'slug',
+                'seo',
+                'faviconUrl',
+                'headerLogoUrl',
+                'assetBaseUrl',
+                'previewMainOnly'
+            ));
+            $html = (string)ob_get_clean();
+
+            if ($assetBaseUrl !== '') {
+                $baseTag = '<base href="' . htmlspecialchars($assetBaseUrl . '/', ENT_QUOTES, 'UTF-8') . '">';
+                $patched = preg_replace('/<head(\s*)>/i', '<head$1>' . $baseTag, $html, 1);
+                if (is_string($patched) && $patched !== '') {
+                    $html = $patched;
+                }
+            }
+
+            echo $html;
+        } catch (\Throwable) {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            http_response_code(500);
+            echo 'Frontend-Layout konnte nicht gerendert werden.';
+        }
     }
 
     private function parseMediaIdFromUrl(string $url): ?int
@@ -220,7 +250,12 @@ final class PagesController
                     continue;
                 }
                 $key = (string)$k;
-                if (in_array($key, ['media_id', 'image_media_id', 'poster_media_id'], true)) {
+                $isImageUrlLike = in_array($key, ['url', 'image_url', 'poster_url'], true)
+                    || (bool)preg_match('/_image_url$/', $key);
+                $isMediaIdLike = in_array($key, ['media_id', 'image_media_id', 'poster_media_id'], true)
+                    || (bool)preg_match('/_media_id$/', $key);
+
+                if ($isMediaIdLike) {
                     $mid = (int)$v;
                     if ($mid > 0) {
                         $mediaIds[$mid] = true;
@@ -230,7 +265,7 @@ final class PagesController
                 if (!is_string($v)) {
                     continue;
                 }
-                if (!in_array($key, ['url', 'image_url', 'poster_url'], true)) {
+                if (!$isImageUrlLike) {
                     continue;
                 }
                 $parts = parse_url(trim($v));
@@ -292,14 +327,27 @@ final class PagesController
                 }
                 $key = (string)$k;
 
-                if (in_array($key, ['url', 'image_url', 'poster_url'], true) && is_string($v)) {
+                $isImageUrlLike = in_array($key, ['url', 'image_url', 'poster_url'], true)
+                    || (bool)preg_match('/_image_url$/', $key);
+                $isMediaIdLike = in_array($key, ['media_id', 'image_media_id', 'poster_media_id'], true)
+                    || (bool)preg_match('/_media_id$/', $key);
+
+                if ($isImageUrlLike && is_string($v)) {
                     $value[$key] = $this->absolutizeCmsMediaUrl($v, $cmsBaseUrl);
                 }
 
-                if (in_array($key, ['media_id', 'image_media_id', 'poster_media_id'], true)) {
+                if ($isMediaIdLike) {
                     $mid = (int)$v;
                     if ($mid > 0 && isset($focusMap[$mid])) {
-                        $targetField = $key === 'poster_media_id' ? 'poster_url' : 'image_url';
+                        if ($key === 'poster_media_id') {
+                            $targetField = 'poster_url';
+                        } elseif ($key === 'media_id' || $key === 'image_media_id') {
+                            $targetField = 'image_url';
+                        } elseif (preg_match('/_media_id$/', $key) === 1) {
+                            $targetField = (string)preg_replace('/_media_id$/', '_image_url', $key);
+                        } else {
+                            $targetField = 'image_url';
+                        }
                         if (!isset($value[$targetField]) || trim((string)$value[$targetField]) === '') {
                             $value[$targetField] = $this->absolutizeCmsMediaUrl('/media/file?id=' . $mid, $cmsBaseUrl);
                         }
@@ -326,7 +374,7 @@ final class PagesController
                 if (!is_string($v)) {
                     continue;
                 }
-                if (!in_array($key, ['url', 'image_url', 'poster_url'], true)) {
+                if (!$isImageUrlLike) {
                     continue;
                 }
                 $mediaId = $this->parseMediaIdFromUrl($v);
@@ -344,6 +392,239 @@ final class PagesController
         };
 
         return $apply($blocks);
+    }
+
+    private function buildPreviewNavigationItems(\PDO $pdo): array
+    {
+        $stmt = $pdo->query("
+            SELECT id, nav_label, slug, nav_area, nav_order
+            FROM pages
+            WHERE is_deleted = 0 AND status = 'live' AND nav_visible = 1
+            ORDER BY nav_order ASC, id ASC
+        ");
+        $rows = $stmt ? $stmt->fetchAll() : [];
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $slug = trim((string)($r['slug'] ?? ''), '/');
+            $url = ($slug === '' || $slug === 'home' || $slug === 'start') ? '/' : ('/' . $slug);
+            $title = trim((string)($r['nav_label'] ?? ''));
+            if ($title === '') {
+                $title = $slug !== '' ? $slug : 'Start';
+            }
+
+            $items[] = [
+                'id' => (int)($r['id'] ?? 0),
+                'title' => $title,
+                'url' => $url,
+                'slug' => $slug,
+                'area' => (string)($r['nav_area'] ?? 'header'),
+                'sort_order' => (int)($r['nav_order'] ?? 0),
+                'nav_order' => (int)($r['nav_order'] ?? 0),
+            ];
+        }
+
+        return $items;
+    }
+
+    private function normalizeHex(string $color, string $fallback): string
+    {
+        $color = trim($color);
+        if (preg_match('/^#([0-9a-fA-F]{3})$/', $color, $m) === 1) {
+            $r = $m[1][0]; $g = $m[1][1]; $b = $m[1][2];
+            $color = '#' . $r . $r . $g . $g . $b . $b;
+        }
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1) {
+            return strtolower($color);
+        }
+        return $fallback;
+    }
+
+    private function enrichBlocksWithEventsFromDb(\PDO $pdo, array $blocks): array
+    {
+        $cache = [];
+        $walk = function ($value) use (&$walk, &$cache, $pdo) {
+            if (!is_array($value)) {
+                return $value;
+            }
+            if (array_is_list($value)) {
+                foreach ($value as $i => $item) {
+                    $value[$i] = $walk($item);
+                }
+                return $value;
+            }
+
+            foreach ($value as $k => $v) {
+                if (is_array($v)) {
+                    $value[$k] = $walk($v);
+                }
+            }
+
+            if ((string)($value['type'] ?? '') !== 'events') {
+                return $value;
+            }
+
+            $rawCategories = trim((string)($value['category_slugs'] ?? ($value['category_slug'] ?? '')));
+            $categoryList = $rawCategories !== ''
+                ? array_values(array_filter(array_map(static fn(string $v): string => trim($v), explode(',', $rawCategories)), static fn(string $v): bool => $v !== ''))
+                : [];
+            $rawLimit = strtolower(trim((string)($value['limit'] ?? 'all')));
+            if ($rawLimit === 'all') {
+                $limit = 500;
+            } else {
+                $limit = (int)$rawLimit;
+                if ($limit <= 0) $limit = 50;
+                if ($limit > 500) $limit = 500;
+            }
+            $includePast = true;
+            $key = strtolower(implode(',', $categoryList)) . '|' . $limit . '|' . ($includePast ? '1' : '0');
+
+            if (!isset($cache[$key])) {
+                $sql = "
+                    SELECT
+                      e.id,
+                      e.title,
+                      e.description,
+                      e.event_date,
+                      e.event_date_from,
+                      e.event_date_to,
+                      e.image_media_id,
+                      e.youtube_url,
+                      m.focus_x AS image_focus_x,
+                      m.focus_y AS image_focus_y,
+                      GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.name ASC SEPARATOR ', ') AS category_names,
+                      GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs
+                    FROM events e
+                    LEFT JOIN event_category_map ecm ON ecm.event_id = e.id
+                    LEFT JOIN event_categories c ON c.id = ecm.category_id AND c.is_deleted = 0
+                    LEFT JOIN media_items m ON m.id = e.image_media_id AND m.is_deleted = 0
+                    WHERE e.is_deleted = 0
+                      AND e.is_published = 1
+                ";
+                $params = [];
+                if ($categoryList !== []) {
+                    $inParts = [];
+                    foreach ($categoryList as $idx => $slugVal) {
+                        $ph = ':slug' . $idx;
+                        $inParts[] = $ph;
+                        $params[$ph] = $slugVal;
+                    }
+                    $sql .= " AND EXISTS (
+                        SELECT 1
+                        FROM event_category_map x
+                        JOIN event_categories xc ON xc.id = x.category_id
+                        WHERE x.event_id = e.id
+                          AND xc.is_deleted = 0
+                          AND xc.slug IN (" . implode(',', $inParts) . ")
+                    )";
+                }
+                if (!$includePast) {
+                    $sql .= " AND (COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) IS NULL OR COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) >= CURDATE())";
+                }
+                $sql .= " GROUP BY e.id ORDER BY CASE WHEN COALESCE(e.event_date_from, DATE(e.event_date)) IS NULL THEN 1 ELSE 0 END ASC, COALESCE(e.event_date_from, DATE(e.event_date)) ASC, e.id DESC LIMIT :lim";
+
+                $stmt = $pdo->prepare($sql);
+                foreach ($params as $pk => $pv) {
+                    $stmt->bindValue($pk, $pv);
+                }
+                $stmt->bindValue(':lim', $limit, \PDO::PARAM_INT);
+                $stmt->execute();
+                $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $items = [];
+                $eventIds = [];
+                foreach (is_array($rows) ? $rows : [] as $r) {
+                    if (!is_array($r)) continue;
+                    $eventId = (int)($r['id'] ?? 0);
+                    if ($eventId <= 0) continue;
+                    $eventIds[] = $eventId;
+                    $mid = (int)($r['image_media_id'] ?? 0);
+                    $dateFrom = trim((string)($r['event_date_from'] ?? ''));
+                    $dateTo = trim((string)($r['event_date_to'] ?? ''));
+                    if ($dateFrom === '' && trim((string)($r['event_date'] ?? '')) !== '') {
+                        $dateFrom = (string)date('Y-m-d', (int)strtotime((string)$r['event_date']));
+                    }
+                    $catNames = trim((string)($r['category_names'] ?? ''));
+                    $catSlugs = trim((string)($r['category_slugs'] ?? ''));
+                    $items[] = [
+                        'id' => $eventId,
+                        'title' => (string)($r['title'] ?? ''),
+                        'text' => (string)($r['description'] ?? ''),
+                        'date' => (string)($r['event_date'] ?? ''),
+                        'date_from' => $dateFrom,
+                        'date_to' => $dateTo,
+                        'image_url' => $mid > 0 ? ('/media/file?id=' . $mid) : '',
+                        'image_focus_x' => ($r['image_focus_x'] !== null && $r['image_focus_x'] !== '') ? (float)$r['image_focus_x'] : null,
+                        'image_focus_y' => ($r['image_focus_y'] !== null && $r['image_focus_y'] !== '') ? (float)$r['image_focus_y'] : null,
+                        'youtube_url' => (string)($r['youtube_url'] ?? ''),
+                        'category_name' => $catNames,
+                        'category_slug' => $catSlugs,
+                        'category_names' => $catNames !== '' ? array_values(array_filter(array_map('trim', explode(',', $catNames)), static fn(string $v): bool => $v !== '')) : [],
+                        'category_slugs' => $catSlugs !== '' ? array_values(array_filter(array_map('trim', explode(',', $catSlugs)), static fn(string $v): bool => $v !== '')) : [],
+                        'image_variants' => [],
+                    ];
+                }
+
+                if ($eventIds !== []) {
+                    try {
+                        $ph2 = implode(',', array_fill(0, count($eventIds), '?'));
+                        $vsql = "
+                            SELECT
+                              ecm.event_id,
+                              ec.slug AS category_slug,
+                              ec.name AS category_name,
+                              ecm.media_id,
+                              mi.focus_x AS focus_x,
+                              mi.focus_y AS focus_y
+                            FROM event_category_media ecm
+                            JOIN event_categories ec ON ec.id = ecm.category_id AND ec.is_deleted = 0
+                            JOIN media_items mi ON mi.id = ecm.media_id AND mi.is_deleted = 0
+                            WHERE ecm.event_id IN ($ph2)
+                            ORDER BY ecm.event_id ASC, ec.sort_order ASC, ec.name ASC
+                        ";
+                        $vst = $pdo->prepare($vsql);
+                        foreach ($eventIds as $i2 => $eid2) {
+                            $vst->bindValue($i2 + 1, (int)$eid2, \PDO::PARAM_INT);
+                        }
+                        $vst->execute();
+                        $vrows = $vst->fetchAll(\PDO::FETCH_ASSOC);
+                        $variantsByEvent = [];
+                        foreach (is_array($vrows) ? $vrows : [] as $vr) {
+                            if (!is_array($vr)) continue;
+                            $eid3 = (int)($vr['event_id'] ?? 0);
+                            $mid3 = (int)($vr['media_id'] ?? 0);
+                            if ($eid3 <= 0 || $mid3 <= 0) continue;
+                            $variantsByEvent[$eid3][] = [
+                                'category_slug' => trim((string)($vr['category_slug'] ?? '')),
+                                'category_name' => trim((string)($vr['category_name'] ?? '')),
+                                'image_url' => '/media/file?id=' . $mid3,
+                                'image_focus_x' => ($vr['focus_x'] !== null && $vr['focus_x'] !== '') ? (float)$vr['focus_x'] : null,
+                                'image_focus_y' => ($vr['focus_y'] !== null && $vr['focus_y'] !== '') ? (float)$vr['focus_y'] : null,
+                            ];
+                        }
+                        foreach ($items as $ix => $itx) {
+                            $eid4 = (int)($itx['id'] ?? 0);
+                            if ($eid4 > 0 && isset($variantsByEvent[$eid4])) {
+                                $items[$ix]['image_variants'] = $variantsByEvent[$eid4];
+                            }
+                        }
+                    } catch (\Throwable) {
+                        // Optional feature in preview only; ignore if table missing.
+                    }
+                }
+                $cache[$key] = $items;
+            }
+
+            $value['items'] = $cache[$key];
+            return $value;
+        };
+
+        return $walk($blocks);
     }
 
     /** @return array{0:array,1:string,2:\PDO,3:PageRepositoryDb,4:PageService} */
@@ -377,7 +658,7 @@ final class PagesController
             'next'     => '/pages',
             'pageCss'  => 'pages-list',
             'headline' => 'Seiten',
-            'subtitle' => 'Seiten anlegen, bearbeiten oder löschen (Soft-Delete).',
+            'subtitle' => 'Seiten anlegen, bearbeiten oder lÃ¶schen (Soft-Delete).',
         ]);
 
         require __DIR__ . '/../Views/pages_list.php';
@@ -395,14 +676,14 @@ final class PagesController
         unset($_SESSION['flash']);
 
         \admin_layout_begin([
-            'title'    => 'Gelöschte Seiten',
+            'title'    => 'GelÃ¶schte Seiten',
             'theme'    => $theme,
             'active'   => 'pages',
             'user'     => $user,
             'next'     => '/pages',
             'pageCss'  => 'pages-list',
-            'headline' => 'Gelöschte Seiten',
-            'subtitle' => 'Hier kannst du gelöschte Seiten wiederherstellen.',
+            'headline' => 'GelÃ¶schte Seiten',
+            'subtitle' => 'Hier kannst du gelÃ¶schte Seiten wiederherstellen.',
         ]);
 
         require __DIR__ . '/../Views/pages_deleted.php';
@@ -416,11 +697,11 @@ final class PagesController
 
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-        // Neue Seite? => zusätzlich pages.create benötigen
+        // Neue Seite? => zusÃ¤tzlich pages.create benÃ¶tigen
         if ($id <= 0) {
             \admin_require_perm('pages.create');
         } else {
-            // Bearbeiten-Seite öffnen ist "edit"
+            // Bearbeiten-Seite Ã¶ffnen ist "edit"
             \admin_require_perm('pages.edit');
         }
 
@@ -462,8 +743,14 @@ final class PagesController
         $revisions = [];
         $selectedRevision = null;
         $navCandidates = $repo->listActive();
+        $eventCategoryOptions = [];
+        try {
+            $eventCategoryOptions = (new EventCategoryRepositoryDb($_pdo))->listActive();
+        } catch (\Throwable) {
+            $eventCategoryOptions = [];
+        }
 
-        // SEO-Override (nur seitenspezifische Werte) für das Formular laden
+        // SEO-Override (nur seitenspezifische Werte) fÃ¼r das Formular laden
         $seoSvc      = new SeoService(new SeoRepositoryDb($_pdo), new SiteSettingsRepositoryDb($_pdo));
         $seoOverride = $id > 0 ? ($seoSvc->getForPage($id, $page)['_override'] ?? []) : [];
 
@@ -483,7 +770,7 @@ final class PagesController
             'next'     => '/pages',
             'pageCss'  => 'pages-edit',
             'headline' => 'Seite',
-            'subtitle' => 'Slug muss eindeutig sein. Löschen ist Soft-Delete.',
+            'subtitle' => 'Slug muss eindeutig sein. LÃ¶schen ist Soft-Delete.',
         ]);
 
         require __DIR__ . '/../Views/pages_edit.php';
@@ -492,7 +779,7 @@ final class PagesController
 
     public function save(): void
     {
-        $user = \admin_require_perm('pages.view'); // Basis: darf überhaupt Pages nutzen
+        $user = \admin_require_perm('pages.view'); // Basis: darf Ã¼berhaupt Pages nutzen
         [$user, $theme, $_pdo, $repo, $svc] = $this->deps($user);
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -501,7 +788,7 @@ final class PagesController
             return;
         }
 
-        // ✅ CSRF prüfen (POST + Sideeffect)
+        // âœ… CSRF prÃ¼fen (POST + Sideeffect)
         \admin_verify_csrf();
 
         $id = (int)($_POST['id'] ?? 0);
@@ -513,7 +800,7 @@ final class PagesController
             \admin_require_perm('pages.create');
         }
 
-        // Status-Änderung ist separat
+        // Status-Ã„nderung ist separat
         $postedStatus = (string)($_POST['status'] ?? 'live');
         if (!in_array($postedStatus, ['live', 'draft'], true)) $postedStatus = 'live';
 
@@ -629,7 +916,7 @@ final class PagesController
             ];
         }
 
-        // SEO-Override für die Formular-Wiederanzeige
+        // SEO-Override fÃ¼r die Formular-Wiederanzeige
         $seoOverride = $id2 > 0 ? ($seoSvc->getForPage($id2, is_array($page) ? $page : [])['_override'] ?? []) : [];
 
         \admin_layout_begin([
@@ -640,7 +927,7 @@ final class PagesController
             'next'     => '/pages',
             'pageCss'  => 'pages-edit',
             'headline' => 'Seite',
-            'subtitle' => 'Slug muss eindeutig sein. Löschen ist Soft-Delete.',
+            'subtitle' => 'Slug muss eindeutig sein. LÃ¶schen ist Soft-Delete.',
         ]);
 
         require __DIR__ . '/../Views/pages_edit.php';
@@ -708,7 +995,7 @@ final class PagesController
             return;
         }
 
-        // ✅ CSRF prüfen
+        // âœ… CSRF prÃ¼fen
         \admin_verify_csrf();
 
         $id = (int)($_POST['id'] ?? 0);
@@ -720,7 +1007,7 @@ final class PagesController
 
     public function restore(): void
     {
-        // Restore hängt an delete
+        // Restore hÃ¤ngt an delete
         $user = \admin_require_perm('pages.delete');
         [$user, $_theme, $_pdo, $repo] = $this->deps($user);
 
@@ -730,7 +1017,7 @@ final class PagesController
             return;
         }
 
-        // ✅ CSRF prüfen
+        // âœ… CSRF prÃ¼fen
         \admin_verify_csrf();
 
         $id = (int)($_POST['id'] ?? 0);

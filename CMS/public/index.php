@@ -56,6 +56,16 @@ $router->post('/pages/restore', \App\Controller\PagesController::class, 'restore
 $router->get('/pages/deleted', \App\Controller\PagesController::class, 'deleted');
 $router->post('/pages/purge', \App\Controller\PagesController::class, 'purge');
 
+$router->get('/events', \App\Controller\EventsController::class, 'index');
+$router->get('/events/categories', \App\Controller\EventsController::class, 'categories');
+$router->post('/events/categories/save', \App\Controller\EventsController::class, 'saveCategory');
+$router->get('/events/edit', \App\Controller\EventsController::class, 'edit');
+$router->post('/events/save', \App\Controller\EventsController::class, 'save');
+$router->post('/events/delete', \App\Controller\EventsController::class, 'delete');
+$router->post('/events/restore', \App\Controller\EventsController::class, 'restore');
+$router->get('/events/deleted', \App\Controller\EventsController::class, 'deleted');
+$router->post('/events/purge', \App\Controller\EventsController::class, 'purge');
+
 $router->get('/migrate', \App\Controller\MigrateController::class, 'show');
 $router->post('/migrate/run', \App\Controller\MigrateController::class, 'run');
 $router->post('/migrate/baseline', \App\Controller\MigrateController::class, 'baseline');

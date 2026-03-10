@@ -1,0 +1,59 @@
+<?php
+declare(strict_types=1);
+
+echo flash_render($flash ?? null);
+
+$canEdit = function_exists('admin_can') && admin_can('events.edit');
+$csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
+?>
+
+<div class="pages-actions">
+  <a class="btn btn--ghost" href="/events">Zurueck zu Events</a>
+</div>
+
+<div class="pages-card" style="margin-bottom:1rem;border-left:4px solid #f59e0b;">
+  <div class="pages-hint" style="padding:.85rem 1rem;">
+    Hinweis: Wenn du einen Kategorienamen aenderst, wird der Slug automatisch mitgeaendert.
+    Bereits gesetzte Kategorien im Pagebuilder-Events-Block (Filter nach Slug) verlieren dadurch ihre Zuordnung und muessen neu ausgewaehlt werden.
+  </div>
+</div>
+
+<div class="pages-card">
+  <table class="pages-table">
+    <thead>
+      <tr>
+        <th style="width:80px;">ID</th>
+        <th>Name</th>
+        <th>Slug</th>
+        <th style="width:220px;">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($rows as $r): ?>
+      <?php
+        $id = (int)($r['id'] ?? 0);
+        $name = (string)($r['name'] ?? '');
+        $slug = (string)($r['slug'] ?? '');
+      ?>
+      <tr>
+        <td><?= $id ?></td>
+        <td>
+          <form method="post" action="/events/categories/save" class="form-reset" style="display:flex;gap:.5rem;align-items:center;">
+            <?= $csrfField ?>
+            <input type="hidden" name="id" value="<?= $id ?>">
+            <input class="pages-edit-input" type="text" name="name" value="<?= h($name) ?>" style="min-width:280px;" <?= $canEdit ? '' : 'readonly' ?>>
+            <?php if ($canEdit): ?>
+              <button type="submit" class="btn btn--ghost">Speichern</button>
+            <?php endif; ?>
+          </form>
+        </td>
+        <td><code><?= h($slug) ?></code></td>
+        <td></td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (($rows ?? []) === []): ?>
+      <tr><td colspan="4"><span class="pages-hint">Keine Kategorien vorhanden.</span></td></tr>
+    <?php endif; ?>
+    </tbody>
+  </table>
+</div>

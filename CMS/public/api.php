@@ -125,7 +125,22 @@ function validate_hex_color(string $color, string $default): string
  */
 function get_public_settings(PDO $pdo): array
 {
-    $keys = ['site_title', 'brand_color_primary', 'brand_color_secondary', 'brand_color_tertiary', 'logo_url', 'favicon_media_id', 'cms_logo_light_media_id', 'cms_logo_dark_media_id'];
+    $keys = [
+        'site_title',
+        'domain',
+        'brand_color_primary',
+        'brand_color_secondary',
+        'brand_color_tertiary',
+        'logo_url',
+        'favicon_media_id',
+        'cms_logo_light_media_id',
+        'cms_logo_dark_media_id',
+        'contact_name',
+        'contact_email',
+        'contact_phone',
+        'contact_address',
+        'contact_postal_city'
+    ];
     $in   = implode(', ', array_fill(0, count($keys), '?'));
     $stmt = $pdo->prepare("SELECT `key`, `value` FROM site_settings WHERE `key` IN ({$in})");
     $stmt->execute($keys);
@@ -152,6 +167,12 @@ function get_public_settings(PDO $pdo): array
         'cms_logo_light_url'    => $cmsLogoLightUrl,
         'cms_logo_dark_url'     => $cmsLogoDarkUrl,
         'favicon_url'           => $faviconUrl,
+        'domain'                => (string)($raw['domain'] ?? ''),
+        'contact_name'          => (string)($raw['contact_name'] ?? ''),
+        'contact_email'         => (string)($raw['contact_email'] ?? ''),
+        'contact_phone'         => (string)($raw['contact_phone'] ?? ''),
+        'contact_address'       => (string)($raw['contact_address'] ?? ''),
+        'contact_postal_city'   => (string)($raw['contact_postal_city'] ?? ''),
     ];
 }
 
@@ -165,6 +186,36 @@ function normalize_slug(string $slug): string
     if ($slug[0] !== '/') $slug = '/' . $slug;
     if (strlen($slug) > 1) $slug = rtrim($slug, '/');
     return $slug;
+}
+
+function normalize_event_category_slug(string $slug): string
+{
+    $slug = mb_strtolower(trim($slug), 'UTF-8');
+    $slug = preg_replace('/[^a-z0-9]+/u', '-', $slug) ?? '';
+    return trim($slug, '-');
+}
+
+function api_db_table_exists(PDO $pdo, string $table): bool
+{
+    $tableEsc = str_replace('`', '``', $table);
+    try {
+        $pdo->query("SELECT 1 FROM `$tableEsc` LIMIT 0");
+        return true;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function api_db_column_exists(PDO $pdo, string $table, string $column): bool
+{
+    $tableEsc = str_replace('`', '``', $table);
+    $colEsc = str_replace('`', '``', $column);
+    try {
+        $pdo->query("SELECT `$colEsc` FROM `$tableEsc` LIMIT 0");
+        return true;
+    } catch (Throwable) {
+        return false;
+    }
 }
 
 // --------------------------------------------------
@@ -781,6 +832,226 @@ if ($method === 'GET' && $sub === '/navigation') {
     }
 
     json_response(['items' => $out], 200);
+}
+
+// --- /events ---
+if ($method === 'GET' && $sub === '/events') {
+    $categorySlug = normalize_event_category_slug((string)($_GET['category'] ?? '')); // legacy single filter
+    $categoriesRaw = trim((string)($_GET['categories'] ?? ''));
+    $categorySlugs = [];
+    if ($categoriesRaw !== '') {
+        $parts = explode(',', $categoriesRaw);
+        foreach ($parts as $p) {
+            $slug = normalize_event_category_slug((string)$p);
+            if ($slug !== '') {
+                $categorySlugs[] = $slug;
+            }
+        }
+        $categorySlugs = array_values(array_unique($categorySlugs));
+    } elseif ($categorySlug !== '') {
+        $categorySlugs = [$categorySlug];
+    }
+    $rawLimit = strtolower(trim((string)($_GET['limit'] ?? '6')));
+    if ($rawLimit === 'all') {
+        $limit = 500;
+    } else {
+        $limit = (int)$rawLimit;
+        if ($limit <= 0) $limit = 6;
+        if ($limit > 500) $limit = 500;
+    }
+    $includePast = !empty($_GET['include_past']);
+    $supportsMulti = api_db_table_exists($pdo, 'event_category_map')
+        && api_db_column_exists($pdo, 'events', 'event_date_from')
+        && api_db_column_exists($pdo, 'events', 'event_date_to');
+
+    if ($supportsMulti) {
+        $sql = "
+            SELECT
+              e.id,
+              e.title,
+              e.description,
+              e.event_date,
+              e.event_date_from,
+              e.event_date_to,
+              e.image_media_id,
+              e.youtube_url,
+              e.sort_order,
+              m.focus_x AS image_focus_x,
+              m.focus_y AS image_focus_y,
+              GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.name ASC SEPARATOR ', ') AS category_names,
+              GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs
+            FROM events e
+            LEFT JOIN event_category_map ecm ON ecm.event_id = e.id
+            LEFT JOIN event_categories c ON c.id = ecm.category_id AND c.is_deleted = 0
+            LEFT JOIN media_items m ON m.id = e.image_media_id AND m.is_deleted = 0
+            WHERE e.is_deleted = 0
+              AND e.is_published = 1
+        ";
+        $params = [];
+        if ($categorySlugs !== []) {
+            $inParts = [];
+            foreach ($categorySlugs as $idx => $slugVal) {
+                $ph = ':category_slug_' . $idx;
+                $inParts[] = $ph;
+                $params[$ph] = $slugVal;
+            }
+            $sql .= " AND EXISTS (
+                SELECT 1
+                FROM event_category_map x
+                JOIN event_categories xc ON xc.id = x.category_id
+                WHERE x.event_id = e.id
+                  AND xc.is_deleted = 0
+                  AND xc.slug IN (" . implode(',', $inParts) . ")
+            )";
+        }
+        if (!$includePast) {
+            $sql .= " AND (COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) IS NULL OR COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) >= CURDATE())";
+        }
+        $sql .= "
+            GROUP BY e.id
+            ORDER BY
+              CASE WHEN COALESCE(e.event_date_from, DATE(e.event_date)) IS NULL THEN 1 ELSE 0 END ASC,
+              COALESCE(e.event_date_from, DATE(e.event_date)) ASC,
+              e.id DESC
+            LIMIT :lim
+        ";
+    } else {
+        $sql = "
+            SELECT
+              e.id,
+              e.title,
+              e.description,
+              e.event_date,
+              e.image_media_id,
+              e.youtube_url,
+              e.sort_order,
+              m.focus_x AS image_focus_x,
+              m.focus_y AS image_focus_y,
+              c.name AS category_name,
+              c.slug AS category_slug
+            FROM events e
+            LEFT JOIN event_categories c ON c.id = e.category_id
+            LEFT JOIN media_items m ON m.id = e.image_media_id AND m.is_deleted = 0
+            WHERE e.is_deleted = 0
+              AND e.is_published = 1
+        ";
+        $params = [];
+        if ($categorySlugs !== []) {
+            $inParts = [];
+            foreach ($categorySlugs as $idx => $slugVal) {
+                $ph = ':category_slug_' . $idx;
+                $inParts[] = $ph;
+                $params[$ph] = $slugVal;
+            }
+            $sql .= " AND c.slug IN (" . implode(',', $inParts) . ")";
+        }
+        if (!$includePast) {
+            $sql .= " AND (e.event_date IS NULL OR DATE(e.event_date) >= CURDATE())";
+        }
+        $sql .= "
+            ORDER BY
+              CASE WHEN e.event_date IS NULL THEN 1 ELSE 0 END ASC,
+              e.event_date ASC,
+              e.id DESC
+            LIMIT :lim
+        ";
+    }
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll();
+    if (!is_array($rows)) $rows = [];
+
+    $eventIds = [];
+    $items = [];
+    foreach ($rows as $r) {
+        if (!is_array($r)) continue;
+        $eventId = (int)($r['id'] ?? 0);
+        if ($eventId <= 0) continue;
+        $eventIds[] = $eventId;
+        $mid = (int)($r['image_media_id'] ?? 0);
+        $dateFrom = trim((string)($r['event_date_from'] ?? ''));
+        $dateTo = trim((string)($r['event_date_to'] ?? ''));
+        if ($dateFrom === '' && trim((string)($r['event_date'] ?? '')) !== '') {
+            $dateFrom = (string)date('Y-m-d', (int)strtotime((string)$r['event_date']));
+        }
+        $catNames = trim((string)($r['category_names'] ?? ''));
+        $catSlugs = trim((string)($r['category_slugs'] ?? ''));
+        if ($catNames === '') {
+            $catNames = trim((string)($r['category_name'] ?? ''));
+        }
+        if ($catSlugs === '') {
+            $catSlugs = trim((string)($r['category_slug'] ?? ''));
+        }
+        $items[] = [
+            'id' => $eventId,
+            'title' => (string)($r['title'] ?? ''),
+            'text' => (string)($r['description'] ?? ''),
+            'date' => (string)($r['event_date'] ?? ''), // legacy compatibility
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'image_url' => $mid > 0 ? ('/media/file?id=' . $mid) : '',
+            'image_focus_x' => ($r['image_focus_x'] !== null && $r['image_focus_x'] !== '') ? (float)$r['image_focus_x'] : null,
+            'image_focus_y' => ($r['image_focus_y'] !== null && $r['image_focus_y'] !== '') ? (float)$r['image_focus_y'] : null,
+            'youtube_url' => (string)($r['youtube_url'] ?? ''),
+            'category_name' => $catNames,
+            'category_slug' => $catSlugs,
+            'category_names' => $catNames !== '' ? array_values(array_filter(array_map('trim', explode(',', $catNames)), static fn(string $v): bool => $v !== '')) : [],
+            'category_slugs' => $catSlugs !== '' ? array_values(array_filter(array_map('trim', explode(',', $catSlugs)), static fn(string $v): bool => $v !== '')) : [],
+            'image_variants' => [],
+        ];
+    }
+
+    if ($eventIds !== [] && api_db_table_exists($pdo, 'event_category_media')) {
+        $ph = implode(',', array_fill(0, count($eventIds), '?'));
+        $vsql = "
+            SELECT
+              ecm.event_id,
+              ec.slug AS category_slug,
+              ec.name AS category_name,
+              ecm.media_id,
+              mi.focus_x AS focus_x,
+              mi.focus_y AS focus_y
+            FROM event_category_media ecm
+            JOIN event_categories ec ON ec.id = ecm.category_id AND ec.is_deleted = 0
+            JOIN media_items mi ON mi.id = ecm.media_id AND mi.is_deleted = 0
+            WHERE ecm.event_id IN ($ph)
+            ORDER BY ecm.event_id ASC, ec.sort_order ASC, ec.name ASC
+        ";
+        $vst = $pdo->prepare($vsql);
+        foreach ($eventIds as $i => $eid) {
+            $vst->bindValue($i + 1, (int)$eid, PDO::PARAM_INT);
+        }
+        $vst->execute();
+        $vrows = $vst->fetchAll();
+        $variantsByEvent = [];
+        foreach (is_array($vrows) ? $vrows : [] as $vr) {
+            if (!is_array($vr)) continue;
+            $eid = (int)($vr['event_id'] ?? 0);
+            if ($eid <= 0) continue;
+            $mid = (int)($vr['media_id'] ?? 0);
+            if ($mid <= 0) continue;
+            $variantsByEvent[$eid][] = [
+                'category_slug' => trim((string)($vr['category_slug'] ?? '')),
+                'category_name' => trim((string)($vr['category_name'] ?? '')),
+                'image_url' => '/media/file?id=' . $mid,
+                'image_focus_x' => ($vr['focus_x'] !== null && $vr['focus_x'] !== '') ? (float)$vr['focus_x'] : null,
+                'image_focus_y' => ($vr['focus_y'] !== null && $vr['focus_y'] !== '') ? (float)$vr['focus_y'] : null,
+            ];
+        }
+        foreach ($items as $idx => $it) {
+            $eid = (int)($it['id'] ?? 0);
+            if ($eid > 0 && isset($variantsByEvent[$eid])) {
+                $items[$idx]['image_variants'] = $variantsByEvent[$eid];
+            }
+        }
+    }
+
+    json_response(['items' => $items], 200);
 }
 
 // --- GET /api/v1/pages/{slug} (single page with blocks + SEO, path param) ---

@@ -121,6 +121,18 @@ function sidebar_render(array $params): void
           </a>
         <?php endif; ?>
 
+        <?php if ($can('events.view')): ?>
+          <a class="nav__item <?= $isActive('events') ?>" href="/events">
+            <span class="nav__icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M3 10h18" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </span><span>Events</span>
+          </a>
+        <?php endif; ?>
+
         <?php if ($can('users.view')): ?>
           <a class="nav__item <?= $isActive('users') ?>" href="/users">
             <span class="nav__icon" aria-hidden="true">

@@ -12,6 +12,9 @@ use App\PageBuilder\Blocks\CtaBlock;
 use App\PageBuilder\Blocks\FaqBlock;
 use App\PageBuilder\Blocks\VideoBlock;
 use App\PageBuilder\Blocks\GalleryBlock;
+use App\PageBuilder\Blocks\ContactFormBlock;
+use App\PageBuilder\Blocks\ImprintBlock;
+use App\PageBuilder\Blocks\EventsBlock;
 
 final class BlockRegistry
 {
@@ -40,6 +43,9 @@ final class BlockRegistry
             new FaqBlock(),
             new VideoBlock(),
             new GalleryBlock(),
+            new ContactFormBlock(),
+            new ImprintBlock(),
+            new EventsBlock(),
         ];
 
         return self::$typesCache;

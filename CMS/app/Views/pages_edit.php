@@ -7,6 +7,7 @@ declare(strict_types=1);
 /** @var array $revisions */
 /** @var ?array $selectedRevision */
 /** @var array $navCandidates */
+/** @var array $eventCategoryOptions */
 
 use App\PageBuilder\BlockRegistry;
 
@@ -70,6 +71,16 @@ $seoOgImage      = (string)($seoOverride['og_image_url']     ?? '');
 $revisions       = is_array($revisions ?? null) ? $revisions : [];
 $selectedRevision = is_array($selectedRevision ?? null) ? $selectedRevision : null;
 $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
+$eventCategoryOptions = is_array($eventCategoryOptions ?? null) ? $eventCategoryOptions : [];
+$eventCategoryOptions = array_values(array_filter(array_map(static function ($row): array {
+    if (!is_array($row)) return [];
+    $slug = trim((string)($row['slug'] ?? ''));
+    $name = trim((string)($row['name'] ?? ''));
+    if ($slug === '' || $name === '') return [];
+    return ['slug' => $slug, 'name' => $name];
+}, $eventCategoryOptions), static fn(array $row): bool => $row !== []));
+$eventCategoryOptionsJson = json_encode($eventCategoryOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $eventCategoryOptionsJson = '[]';
 ?>
 <form method="post" action="/pages/save" class="pages-edit-form" id="pageEditForm">
   <?= admin_csrf_field() ?>
@@ -179,6 +190,9 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="faq">+ FAQ</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="video">+ Video</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="gallery">+ Galerie</button>
+              <button type="button" class="btn btn--ghost btn--sm" data-add-block="contact_form">+ Kontaktformular</button>
+              <button type="button" class="btn btn--ghost btn--sm" data-add-block="imprint">+ Impressum</button>
+              <button type="button" class="btn btn--ghost btn--sm" data-add-block="events">+ Events</button>
             </div>
           <?php else: ?>
             <div class="pages-edit-field-hint pages-edit-pb-readonly">
@@ -424,6 +438,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
 <script>
 (() => {
   const defs = <?= $defsJson ?>;
+  const EVENT_CATEGORY_OPTIONS = <?= $eventCategoryOptionsJson ?>;
   const CAN_EDIT = <?= $canSave ? 'true' : 'false' ?>;
   const BLOCK_LABELS = {
     text: 'Textblock',
@@ -434,6 +449,7 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
     faq: 'FAQ',
     video: 'Video',
     gallery: 'Galerie',
+    events: 'Events',
   };
   function blockLabel(type) {
     const t = String(type || '').trim();
@@ -1042,6 +1058,78 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
 
     let input;
 
+    if (
+      block
+      && block.type === 'events'
+      && key === 'category_slugs'
+      && Array.isArray(EVENT_CATEGORY_OPTIONS)
+      && EVENT_CATEGORY_OPTIONS.length > 0
+    ) {
+      const splitCsv = (raw) => String(raw || '')
+        .split(',')
+        .map((v) => v.trim().toLowerCase())
+        .filter(Boolean);
+      const selected = new Set(splitCsv(val));
+      const known = new Set(EVENT_CATEGORY_OPTIONS.map((c) => String(c.slug || '').trim().toLowerCase()).filter(Boolean));
+
+      const hidden = el('input', { type: 'hidden' });
+      const optionsWrap = el('div');
+      optionsWrap.style.display = 'grid';
+      optionsWrap.style.gridTemplateColumns = 'repeat(auto-fit, minmax(170px, 1fr))';
+      optionsWrap.style.gap = '.4rem .65rem';
+      optionsWrap.style.marginTop = '.35rem';
+
+      const sync = () => {
+        const csv = Array.from(selected).filter(Boolean).join(',');
+        hidden.value = csv;
+        if (!CAN_EDIT) return;
+        block.data[key] = csv;
+        serialize();
+      };
+
+      const addOption = (slug, name, isExtra = false) => {
+        const normalizedSlug = String(slug || '').trim().toLowerCase();
+        if (!normalizedSlug) return;
+        const optionLabel = el('label', { class: 'pages-edit-check' });
+        optionLabel.style.margin = '0';
+        optionLabel.style.padding = '.3rem .45rem';
+        optionLabel.style.border = '1px solid var(--line,#e5e7eb)';
+        optionLabel.style.borderRadius = '8px';
+        const cb = el('input', { type: 'checkbox' });
+        cb.value = normalizedSlug;
+        cb.checked = selected.has(normalizedSlug);
+        cb.disabled = !CAN_EDIT;
+        cb.addEventListener('change', () => {
+          if (cb.checked) selected.add(normalizedSlug);
+          else selected.delete(normalizedSlug);
+          sync();
+        });
+        const label = el('span', { html: isExtra ? `${name} (nicht gefunden)` : name });
+        optionLabel.appendChild(cb);
+        optionLabel.appendChild(label);
+        optionsWrap.appendChild(optionLabel);
+      };
+
+      EVENT_CATEGORY_OPTIONS.forEach((c) => {
+        const slug = String(c && c.slug ? c.slug : '').trim().toLowerCase();
+        const name = String(c && c.name ? c.name : slug).trim();
+        if (!slug || !name) return;
+        addOption(slug, name, false);
+      });
+
+      Array.from(selected).forEach((slug) => {
+        if (!known.has(slug)) {
+          addOption(slug, slug, true);
+        }
+      });
+
+      fieldWrap.appendChild(hidden);
+      fieldWrap.appendChild(optionsWrap);
+      sync();
+      if (hintText) fieldWrap.appendChild(el('div', {class: 'pages-edit-field-hint', html: hintText}));
+      return fieldWrap;
+    }
+
     if (isImageUrlField) {
       input = el('input', {class: 'pages-edit-input', type: 'text', placeholder: '/media/file?id=123'});
       input.value = val;
@@ -1074,7 +1162,13 @@ $navCandidates = is_array($navCandidates ?? null) ? $navCandidates : [];
       enumVals.forEach(opt => {
         const o = document.createElement('option');
         o.value = String(opt);
-        o.textContent = String(opt);
+        if (block && block.type === 'events' && key === 'limit' && String(opt) === 'all') {
+          o.textContent = 'Alle Events';
+        } else if (block && block.type === 'events' && key === 'include_past') {
+          o.textContent = String(opt) === '1' ? 'Ja' : 'Nein';
+        } else {
+          o.textContent = String(opt);
+        }
         if (String(opt) === String(val)) o.selected = true;
         input.appendChild(o);
       });
