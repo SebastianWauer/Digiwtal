@@ -484,12 +484,19 @@ final class PagesController
             }
             $includePast = true;
             $key = strtolower(implode(',', $categoryList)) . '|' . $limit . '|' . ($includePast ? '1' : '0');
+            $hasCategoryColor = function_exists('admin_db_column_exists')
+                ? admin_db_column_exists($pdo, 'event_categories', 'color_hex')
+                : false;
+            $hasEventSubtitle = function_exists('admin_db_column_exists')
+                ? admin_db_column_exists($pdo, 'events', 'subtitle')
+                : false;
 
             if (!isset($cache[$key])) {
                 $sql = "
                     SELECT
                       e.id,
                       e.title,
+                      " . ($hasEventSubtitle ? 'e.subtitle' : "''") . " AS subtitle,
                       e.description,
                       e.event_date,
                       e.event_date_from,
@@ -498,8 +505,11 @@ final class PagesController
                       e.youtube_url,
                       m.focus_x AS image_focus_x,
                       m.focus_y AS image_focus_y,
-                      GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.name ASC SEPARATOR ', ') AS category_names,
-                      GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs
+                      GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ', ') AS category_names,
+                      GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs,
+                      " . ($hasCategoryColor
+                        ? "GROUP_CONCAT(DISTINCT c.color_hex ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',')"
+                        : "''") . " AS category_colors
                     FROM events e
                     LEFT JOIN event_category_map ecm ON ecm.event_id = e.id
                     LEFT JOIN event_categories c ON c.id = ecm.category_id AND c.is_deleted = 0
@@ -551,9 +561,23 @@ final class PagesController
                     }
                     $catNames = trim((string)($r['category_names'] ?? ''));
                     $catSlugs = trim((string)($r['category_slugs'] ?? ''));
+                    $catColors = trim((string)($r['category_colors'] ?? ''));
+                    $catNamesArr = $catNames !== '' ? array_values(array_filter(array_map('trim', explode(',', $catNames)), static fn(string $v): bool => $v !== '')) : [];
+                    $catSlugsArr = $catSlugs !== '' ? array_values(array_filter(array_map('trim', explode(',', $catSlugs)), static fn(string $v): bool => $v !== '')) : [];
+                    $catColorsArr = $catColors !== '' ? array_values(array_filter(array_map(static fn(string $v): string => strtoupper(trim($v)), explode(',', $catColors)), static fn(string $v): bool => preg_match('/^#[0-9A-F]{6}$/', $v) === 1)) : [];
+                    $catColorMap = [];
+                    foreach ($catSlugsArr as $idx => $slugVal) {
+                        $slugKey = strtolower(trim((string)$slugVal));
+                        if ($slugKey === '') continue;
+                        $colorVal = $catColorsArr[$idx] ?? '';
+                        if ($colorVal !== '') {
+                            $catColorMap[$slugKey] = $colorVal;
+                        }
+                    }
                     $items[] = [
                         'id' => $eventId,
                         'title' => (string)($r['title'] ?? ''),
+                        'subtitle' => trim((string)($r['subtitle'] ?? '')),
                         'text' => (string)($r['description'] ?? ''),
                         'date' => (string)($r['event_date'] ?? ''),
                         'date_from' => $dateFrom,
@@ -564,8 +588,10 @@ final class PagesController
                         'youtube_url' => (string)($r['youtube_url'] ?? ''),
                         'category_name' => $catNames,
                         'category_slug' => $catSlugs,
-                        'category_names' => $catNames !== '' ? array_values(array_filter(array_map('trim', explode(',', $catNames)), static fn(string $v): bool => $v !== '')) : [],
-                        'category_slugs' => $catSlugs !== '' ? array_values(array_filter(array_map('trim', explode(',', $catSlugs)), static fn(string $v): bool => $v !== '')) : [],
+                        'category_names' => $catNamesArr,
+                        'category_slugs' => $catSlugsArr,
+                        'category_colors' => $catColorsArr,
+                        'category_color_map' => $catColorMap,
                         'image_variants' => [],
                     ];
                 }
@@ -578,6 +604,7 @@ final class PagesController
                               ecm.event_id,
                               ec.slug AS category_slug,
                               ec.name AS category_name,
+                              " . ($hasCategoryColor ? 'ec.color_hex' : "''") . " AS category_color,
                               ecm.media_id,
                               mi.focus_x AS focus_x,
                               mi.focus_y AS focus_y
@@ -602,6 +629,7 @@ final class PagesController
                             $variantsByEvent[$eid3][] = [
                                 'category_slug' => trim((string)($vr['category_slug'] ?? '')),
                                 'category_name' => trim((string)($vr['category_name'] ?? '')),
+                                'category_color' => strtoupper(trim((string)($vr['category_color'] ?? ''))),
                                 'image_url' => '/media/file?id=' . $mid3,
                                 'image_focus_x' => ($vr['focus_x'] !== null && $vr['focus_x'] !== '') ? (float)$vr['focus_x'] : null,
                                 'image_focus_y' => ($vr['focus_y'] !== null && $vr['focus_y'] !== '') ? (float)$vr['focus_y'] : null,
@@ -658,7 +686,7 @@ final class PagesController
             'next'     => '/pages',
             'pageCss'  => 'pages-list',
             'headline' => 'Seiten',
-            'subtitle' => 'Seiten anlegen, bearbeiten oder lÃ¶schen (Soft-Delete).',
+            'subtitle' => 'Seiten anlegen, bearbeiten oder löschen (Soft-Delete).',
         ]);
 
         require __DIR__ . '/../Views/pages_list.php';
@@ -770,7 +798,7 @@ final class PagesController
             'next'     => '/pages',
             'pageCss'  => 'pages-edit',
             'headline' => 'Seite',
-            'subtitle' => 'Slug muss eindeutig sein. LÃ¶schen ist Soft-Delete.',
+            'subtitle' => 'Slug muss eindeutig sein. Löschen ist Soft-Delete.',
         ]);
 
         require __DIR__ . '/../Views/pages_edit.php';
@@ -927,7 +955,7 @@ final class PagesController
             'next'     => '/pages',
             'pageCss'  => 'pages-edit',
             'headline' => 'Seite',
-            'subtitle' => 'Slug muss eindeutig sein. LÃ¶schen ist Soft-Delete.',
+            'subtitle' => 'Slug muss eindeutig sein. Löschen ist Soft-Delete.',
         ]);
 
         require __DIR__ . '/../Views/pages_edit.php';

@@ -36,7 +36,7 @@ final class ContactFormBlock extends AbstractBlockType
             'form_id' => [
                 'type' => 'string', 'max' => 64,
                 'label' => 'Form-ID (optional)', 'control' => 'input',
-                'hint' => 'Nur a-z, 0-9, _ und -. Leer lassen fuer automatische ID.',
+                'hint' => 'Nur a-z, 0-9, _ und -. Leer lassen für automatische ID.',
             ],
         ];
     }
@@ -52,3 +52,4 @@ final class ContactFormBlock extends AbstractBlockType
         return $clean;
     }
 }
+

@@ -5,9 +5,22 @@ namespace App\Controller;
 
 use App\Repositories\EventCategoryRepositoryDb;
 use App\Repositories\EventRepositoryDb;
+use App\Repositories\MediaRepositoryDb;
+use App\Repositories\MediaUsageRepositoryDb;
+use App\Services\MediaUsageService;
 
 final class EventsController
 {
+    private function mediaUsageService(): MediaUsageService
+    {
+        $pdo = \admin_pdo();
+        return new MediaUsageService(
+            $pdo,
+            new MediaUsageRepositoryDb($pdo),
+            new MediaRepositoryDb($pdo)
+        );
+    }
+
     private function deps(array $user): array
     {
         $theme = \admin_theme_for_user((int)($user['id'] ?? 0));
@@ -26,6 +39,7 @@ final class EventsController
         $flash = $_SESSION['flash'] ?? null;
         unset($_SESSION['flash']);
         try {
+            $this->mediaUsageService()->rebuildAllEventUsages();
             $rows = $events->listActive($categoryId > 0 ? $categoryId : null);
             $allCategories = $categories->listActive();
             $deletedCount = $events->countDeleted();
@@ -44,7 +58,7 @@ final class EventsController
             'next' => '/events',
             'pageCss' => 'pages-list',
             'headline' => 'Events & Termine',
-            'subtitle' => 'Events anlegen, kategorisieren und veroeffentlichen.',
+            'subtitle' => 'Events anlegen, kategorisieren und veröffentlichen.',
         ]);
 
         require __DIR__ . '/../Views/events_list.php';
@@ -67,14 +81,14 @@ final class EventsController
         }
 
         \admin_layout_begin([
-            'title' => 'Geloeschte Events',
+            'title' => 'Gelöschte Events',
             'theme' => $theme,
             'active' => 'events',
             'user' => $user,
             'next' => '/events',
             'pageCss' => 'pages-list',
             'headline' => 'Events',
-            'subtitle' => 'Papierkorb fuer Events.',
+            'subtitle' => 'Papierkorb für Events.',
         ]);
 
         require __DIR__ . '/../Views/events_deleted.php';
@@ -126,6 +140,11 @@ final class EventsController
 
         $id = (int)($_POST['id'] ?? 0);
         $name = trim((string)($_POST['name'] ?? ''));
+        $colorHexRaw = trim((string)($_POST['color_hex'] ?? ''));
+        $colorHex = null;
+        if ($colorHexRaw !== '' && preg_match('/^#[0-9a-fA-F]{6}$/', $colorHexRaw) === 1) {
+            $colorHex = strtoupper($colorHexRaw);
+        }
 
         if ($id <= 0 || $name === '') {
             $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Kategorie-ID und Name sind erforderlich.'];
@@ -140,7 +159,16 @@ final class EventsController
                 header('Location: /events/categories');
                 exit;
             }
-            $categories->updateName($id, $name);
+            $categories->update($id, $name, $colorHex);
+            $saved = $categories->findById($id);
+            if ($colorHex !== null) {
+                $savedColor = strtoupper(trim((string)($saved['color_hex'] ?? '')));
+                if ($savedColor !== $colorHex) {
+                    $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Farbe konnte nicht gespeichert werden (DB-Spalte color_hex fehlt oder ist nicht beschreibbar).'];
+                    header('Location: /events/categories');
+                    exit;
+                }
+            }
             $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Kategorie gespeichert.'];
         } catch (\Throwable $e) {
             $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Kategorie konnte nicht gespeichert werden: ' . $e->getMessage()];
@@ -175,6 +203,7 @@ final class EventsController
             $row = [
                 'id' => 0,
                 'title' => '',
+                'subtitle' => '',
                 'description' => '',
                 'event_date_from' => '',
                 'event_date_to' => '',
@@ -225,10 +254,10 @@ final class EventsController
         }
 
         $title = trim((string)($_POST['title'] ?? ''));
+        $subtitle = trim((string)($_POST['subtitle'] ?? ''));
         $description = trim((string)($_POST['description'] ?? ''));
         $youtubeUrl = trim((string)($_POST['youtube_url'] ?? ''));
         $isPublished = !empty($_POST['is_published']);
-        $imageMediaId = (int)($_POST['image_media_id'] ?? 0);
         $postedCategoryIds = $_POST['category_ids'] ?? [];
         if (!is_array($postedCategoryIds)) {
             $postedCategoryIds = [];
@@ -257,7 +286,7 @@ final class EventsController
         }
 
         if ($youtubeUrl !== '' && preg_match('#^(https?://(www\.)?(youtube\.com|youtu\.be)/)#i', $youtubeUrl) !== 1) {
-            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'YouTube-URL ist ungueltig.'];
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'YouTube-URL ist ungültig.'];
             header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
             exit;
         }
@@ -294,19 +323,31 @@ final class EventsController
             exit;
         }
 
-        $events->save(
+        $savedEventId = $events->save(
             $id > 0 ? $id : null,
             $categoryIds,
             $categoryImageMediaIds,
             $title,
+            $subtitle,
             $description,
             $eventDateFrom,
             $eventDateTo,
-            $imageMediaId > 0 ? $imageMediaId : null,
+            null,
             $youtubeUrl,
             0,
             $isPublished
         );
+        $allowedCategoryIds = array_fill_keys($categoryIds, true);
+        $usageCategoryMap = [];
+        foreach ($categoryImageMediaIds as $cidRaw => $midRaw) {
+            $cid = (int)$cidRaw;
+            $mid = (int)$midRaw;
+            if ($cid <= 0 || $mid <= 0 || !isset($allowedCategoryIds[$cid])) {
+                continue;
+            }
+            $usageCategoryMap[$cid] = $mid;
+        }
+        $this->mediaUsageService()->syncEventUsages($savedEventId, $usageCategoryMap);
 
         $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Event gespeichert.'];
         if (!empty($_POST['save_return'])) {
@@ -328,6 +369,7 @@ final class EventsController
         \admin_verify_csrf();
         $id = (int)($_POST['id'] ?? 0);
         if ($id > 0) {
+            $this->mediaUsageService()->clearEntityUsages('event', $id);
             $events = new EventRepositoryDb(\admin_pdo());
             $events->softDelete($id);
         }
@@ -346,8 +388,22 @@ final class EventsController
         \admin_verify_csrf();
         $id = (int)($_POST['id'] ?? 0);
         if ($id > 0) {
-            $events = new EventRepositoryDb(\admin_pdo());
+            $pdo = \admin_pdo();
+            $events = new EventRepositoryDb($pdo);
             $events->restore($id);
+            $row = $events->findById($id);
+            if (is_array($row)) {
+                $categoryMapRaw = is_array($row['category_image_media_map'] ?? null) ? $row['category_image_media_map'] : [];
+                $categoryMap = [];
+                foreach ($categoryMapRaw as $cidRaw => $midRaw) {
+                    $cid = (int)$cidRaw;
+                    $mid = (int)$midRaw;
+                    if ($cid > 0 && $mid > 0) {
+                        $categoryMap[$cid] = $mid;
+                    }
+                }
+                $this->mediaUsageService()->syncEventUsages($id, $categoryMap);
+            }
         }
         header('Location: /events/deleted');
         exit;
@@ -362,10 +418,25 @@ final class EventsController
             return;
         }
         \admin_verify_csrf();
-        $events = new EventRepositoryDb(\admin_pdo());
+        $pdo = \admin_pdo();
+        $events = new EventRepositoryDb($pdo);
+        try {
+            $idsStmt = $pdo->query("SELECT id FROM events WHERE is_deleted = 1");
+            $rows = $idsStmt ? $idsStmt->fetchAll() : [];
+            foreach (is_array($rows) ? $rows : [] as $r) {
+                if (!is_array($r)) continue;
+                $eid = (int)($r['id'] ?? 0);
+                if ($eid > 0) {
+                    $this->mediaUsageService()->clearEntityUsages('event', $eid);
+                }
+            }
+        } catch (\Throwable) {
+            // Ignore usage cleanup issues in purge flow.
+        }
         $n = $events->purgeDeleted();
         $_SESSION['flash'] = ['type' => 'success', 'msg' => $n > 0 ? ('Papierkorb geleert (' . $n . ').') : 'Papierkorb ist bereits leer.'];
         header('Location: /events/deleted');
         exit;
     }
 }
+

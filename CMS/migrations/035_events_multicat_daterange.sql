@@ -1,10 +1,38 @@
 -- 035_events_multicat_daterange.sql
 -- Events: date range (from/to without time) + multiple categories
 
--- Add date range columns (idempotent)
-ALTER TABLE `events`
-  ADD COLUMN IF NOT EXISTS `event_date_from` DATE NULL AFTER `description`,
-  ADD COLUMN IF NOT EXISTS `event_date_to` DATE NULL AFTER `event_date_from`;
+-- Add date range columns (idempotent, MySQL < 8 compatible)
+SET @has_col := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'events'
+    AND COLUMN_NAME = 'event_date_from'
+);
+SET @sql := IF(
+  @has_col = 0,
+  'ALTER TABLE `events` ADD COLUMN `event_date_from` DATE NULL AFTER `description`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_col := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'events'
+    AND COLUMN_NAME = 'event_date_to'
+);
+SET @sql := IF(
+  @has_col = 0,
+  'ALTER TABLE `events` ADD COLUMN `event_date_to` DATE NULL AFTER `event_date_from`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- Backfill from old datetime column if available
 UPDATE `events`
@@ -31,4 +59,3 @@ INSERT IGNORE INTO `event_category_map` (`event_id`, `category_id`)
 SELECT `id`, `category_id`
 FROM `events`
 WHERE `category_id` IS NOT NULL;
-

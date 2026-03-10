@@ -970,10 +970,11 @@ html[data-theme="dark"] .pages-edit-block-tabs__panels{
   }
   .pages-edit-modal{
     width: calc(100% - 16px);
-    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
   }
   .pages-edit-modal--block{
-    height: calc(100vh - 16px);
+    height: auto;
+    max-height: calc(100dvh - 16px);
   }
   .pages-edit-hero-tabs__bar{
     width: 100%;
@@ -999,5 +1000,63 @@ html[data-theme="dark"] .pages-edit-block-tabs__panels{
     bottom: 10px;
     padding: 5px;
     gap: 6px;
+  }
+}
+
+@media (max-width: 640px){
+  .pages-edit-grid2{
+    grid-template-columns: 1fr;
+  }
+
+  .pages-edit-range{
+    grid-template-columns: 1fr;
+  }
+
+  .pages-edit-quicknav{
+    position: sticky;
+    top: 8px;
+    z-index: 20;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 6px;
+    backdrop-filter: blur(3px);
+  }
+
+  .pages-edit-floating-actions{
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .pages-edit-iconbtn{
+    width: 40px;
+    height: 40px;
+  }
+
+  .pages-edit-modal{
+    width: calc(100% - 10px);
+    max-height: calc(100dvh - 10px);
+  }
+
+  .pages-edit-modal--block{
+    width: calc(100% - 10px);
+    height: calc(100dvh - 10px);
+    max-height: calc(100dvh - 10px);
+  }
+
+  .pages-edit-richtext__toolbar{
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pages-edit-hero-tabs__bar,
+  .pages-edit-block-tabs__bar{
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
   }
 }

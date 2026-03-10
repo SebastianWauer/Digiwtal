@@ -5,7 +5,7 @@ echo flash_render($flash ?? null);
 $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
 ?>
 <div class="pages-actions">
-  <a class="btn btn--ghost" href="/events">Zurueck zu Events</a>
+  <a class="btn btn--ghost" href="/events">Zurück zu Events</a>
   <div class="pages-actions-right">
     <form method="post" action="/events/purge" class="form-reset" onsubmit="return confirm('Papierkorb wirklich leeren?');">
       <?= $csrfField ?>
@@ -63,3 +63,4 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
     </tbody>
   </table>
 </div>
+

@@ -100,6 +100,7 @@ function admin_layout_begin(array $p): void
       <?php endif; ?>
 
     <div class="admin-shell<?= $sidebarCollapsed ? ' is-sidebar-collapsed' : '' ?>">
+      <button type="button" class="mobile-nav-backdrop" data-mobile-nav-close="1" aria-label="Navigation schließen"></button>
       <?php if (!(defined('ADMIN_HIDE_SIDEBAR') && ADMIN_HIDE_SIDEBAR)) {
           sidebar_render([
               'active' => $active,
@@ -111,6 +112,11 @@ function admin_layout_begin(array $p): void
       <main class="main">
         <section class="panel">
           <div class="panel-head">
+            <?php if (!(defined('ADMIN_HIDE_SIDEBAR') && ADMIN_HIDE_SIDEBAR)): ?>
+              <button type="button" class="mobile-nav-toggle" aria-label="Navigation öffnen" title="Navigation öffnen">
+                <span aria-hidden="true">☰</span>
+              </button>
+            <?php endif; ?>
             <h1 class="h1"><?= h($headline) ?></h1>
             <?php if ($subtitle !== ''): ?>
               <div class="welcome"><?= h($subtitle) ?></div>
@@ -170,6 +176,56 @@ function admin_layout_end(): void
   btn.addEventListener('click', function(){
     shell.classList.toggle('is-sidebar-collapsed');
     saveCollapsed(shell.classList.contains('is-sidebar-collapsed'));
+  });
+})();
+</script>
+<script>
+(function(){
+  var shell = document.querySelector('.admin-shell');
+  if (!shell) return;
+
+  var toggle = document.querySelector('.mobile-nav-toggle');
+  var close = document.querySelector('[data-mobile-nav-close="1"]');
+  var sidebar = document.querySelector('.sidebar');
+  if (!toggle || !sidebar) return;
+
+  function isMobile() {
+    return window.matchMedia('(max-width: 820px)').matches;
+  }
+
+  function setOpen(open) {
+    if (!isMobile()) {
+      shell.classList.remove('is-mobile-nav-open');
+      document.body.classList.remove('is-mobile-nav-open');
+      return;
+    }
+    shell.classList.toggle('is-mobile-nav-open', open);
+    document.body.classList.toggle('is-mobile-nav-open', open);
+  }
+
+  toggle.addEventListener('click', function(){
+    setOpen(!shell.classList.contains('is-mobile-nav-open'));
+  });
+
+  if (close) {
+    close.addEventListener('click', function(){
+      setOpen(false);
+    });
+  }
+
+  sidebar.addEventListener('click', function(ev){
+    var navLink = ev.target.closest('.nav__item');
+    if (navLink) setOpen(false);
+  });
+
+  document.addEventListener('keydown', function(ev){
+    if (ev.key === 'Escape') setOpen(false);
+  });
+
+  window.addEventListener('resize', function(){
+    if (!isMobile()) {
+      setOpen(false);
+    }
   });
 })();
 </script>

@@ -5,6 +5,7 @@ echo flash_render($flash ?? null);
 
 $id = (int)($row['id'] ?? 0);
 $title = (string)($row['title'] ?? '');
+$subtitle = (string)($row['subtitle'] ?? '');
 $description = (string)($row['description'] ?? '');
 $eventDateFrom = trim((string)($row['event_date_from'] ?? ''));
 $eventDateTo = trim((string)($row['event_date_to'] ?? ''));
@@ -13,7 +14,6 @@ $selectedCategoryIds = $categoryIdsCsv !== ''
   ? array_values(array_unique(array_filter(array_map(static fn($v): int => (int)$v, explode(',', $categoryIdsCsv)), static fn(int $v): bool => $v > 0)))
   : [];
 $categoryImageMediaMap = is_array($row['category_image_media_map'] ?? null) ? $row['category_image_media_map'] : [];
-$imageMediaId = (int)($row['image_media_id'] ?? 0);
 $youtubeUrl = (string)($row['youtube_url'] ?? '');
 $isPublished = !empty($row['is_published']);
 $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
@@ -29,7 +29,7 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
         <div class="pages-edit-card-head">
           <div>
             <div class="pages-edit-card-title">Event</div>
-            <div class="pages-edit-card-sub">Titel, Datum, Bild, Text und YouTube-Link.</div>
+            <div class="pages-edit-card-sub">Titel, Datum, Kategorien, Text und YouTube-Link.</div>
           </div>
         </div>
 
@@ -37,6 +37,11 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
           <div class="pages-edit-field">
             <div class="pages-edit-field-label">Titel</div>
             <input class="pages-edit-input" type="text" name="title" value="<?= h($title) ?>" required>
+          </div>
+
+          <div class="pages-edit-field">
+            <div class="pages-edit-field-label">Untertitel</div>
+            <input class="pages-edit-input" type="text" name="subtitle" value="<?= h($subtitle) ?>" placeholder="optional">
           </div>
 
           <div class="pages-edit-grid2">
@@ -65,7 +70,7 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
                   <div data-category-media-wrap="<?= $cid ?>" style="margin-top:.5rem;<?= in_array($cid, $selectedCategoryIds, true) ? '' : 'display:none;' ?>">
                     <?php
                       $cmid = (int)($categoryImageMediaMap[$cid] ?? 0);
-                      media_picker_render('Bild fuer ' . (string)($cat['name'] ?? 'Kategorie'), 'category_image_media_ids[' . $cid . ']', $cmid > 0 ? (string)$cmid : '', ['showPreview' => true]);
+                      media_picker_render('Bild für ' . (string)($cat['name'] ?? 'Kategorie'), 'category_image_media_ids[' . $cid . ']', $cmid > 0 ? (string)$cmid : '', ['showPreview' => true]);
                     ?>
                   </div>
                 </div>
@@ -89,15 +94,12 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
             <textarea class="pages-edit-textarea" name="description" rows="8"><?= h($description) ?></textarea>
           </div>
 
-          <div class="pages-edit-field">
-            <?php media_picker_render('Eventbild', 'image_media_id', $imageMediaId > 0 ? (string)$imageMediaId : '', ['showPreview' => true]); ?>
-          </div>
         </div>
       </div>
 
       <div class="pages-edit-actionsbar">
         <button type="submit" class="btn">Speichern</button>
-        <a class="btn btn--ghost" href="/events">Zurueck</a>
+        <a class="btn btn--ghost" href="/events">Zurück</a>
       </div>
     </section>
 
@@ -131,3 +133,4 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
   });
 })();
 </script>
+

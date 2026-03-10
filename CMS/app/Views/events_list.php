@@ -30,7 +30,7 @@ $selectedCategoryId = (int)($_GET['category_id'] ?? 0);
     </form>
 
     <?php if (($deletedCount ?? 0) > 0): ?>
-      <a class="btn btn--ghost" href="/events/deleted">Geloeschte Events (<?= (int)$deletedCount ?>)</a>
+      <a class="btn btn--ghost" href="/events/deleted">Gelöschte Events (<?= (int)$deletedCount ?>)</a>
     <?php endif; ?>
   </div>
 </div>
@@ -83,7 +83,7 @@ $selectedCategoryId = (int)($_GET['category_id'] ?? 0);
               <form method="post" action="/events/delete" class="form-reset">
                 <?= $csrfField ?>
                 <input type="hidden" name="id" value="<?= $id ?>">
-                <button type="submit" class="btn btn--ghost btn--badge btn--danger">Loeschen</button>
+                <button type="submit" class="btn btn--ghost btn--badge btn--danger">Löschen</button>
               </form>
             <?php endif; ?>
           </div>
@@ -93,3 +93,4 @@ $selectedCategoryId = (int)($_GET['category_id'] ?? 0);
     </tbody>
   </table>
 </div>
+

@@ -860,6 +860,8 @@ if ($method === 'GET' && $sub === '/events') {
         if ($limit > 500) $limit = 500;
     }
     $includePast = !empty($_GET['include_past']);
+    $hasCategoryColor = api_db_column_exists($pdo, 'event_categories', 'color_hex');
+    $hasEventSubtitle = api_db_column_exists($pdo, 'events', 'subtitle');
     $supportsMulti = api_db_table_exists($pdo, 'event_category_map')
         && api_db_column_exists($pdo, 'events', 'event_date_from')
         && api_db_column_exists($pdo, 'events', 'event_date_to');
@@ -869,6 +871,7 @@ if ($method === 'GET' && $sub === '/events') {
             SELECT
               e.id,
               e.title,
+              " . ($hasEventSubtitle ? 'e.subtitle' : "''") . " AS subtitle,
               e.description,
               e.event_date,
               e.event_date_from,
@@ -878,8 +881,11 @@ if ($method === 'GET' && $sub === '/events') {
               e.sort_order,
               m.focus_x AS image_focus_x,
               m.focus_y AS image_focus_y,
-              GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.name ASC SEPARATOR ', ') AS category_names,
-              GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs
+              GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ', ') AS category_names,
+              GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs,
+              " . ($hasCategoryColor
+                ? "GROUP_CONCAT(DISTINCT c.color_hex ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',')"
+                : "''") . " AS category_colors
             FROM events e
             LEFT JOIN event_category_map ecm ON ecm.event_id = e.id
             LEFT JOIN event_categories c ON c.id = ecm.category_id AND c.is_deleted = 0
@@ -920,6 +926,7 @@ if ($method === 'GET' && $sub === '/events') {
             SELECT
               e.id,
               e.title,
+              " . ($hasEventSubtitle ? 'e.subtitle' : "''") . " AS subtitle,
               e.description,
               e.event_date,
               e.image_media_id,
@@ -928,7 +935,8 @@ if ($method === 'GET' && $sub === '/events') {
               m.focus_x AS image_focus_x,
               m.focus_y AS image_focus_y,
               c.name AS category_name,
-              c.slug AS category_slug
+              c.slug AS category_slug,
+              " . ($hasCategoryColor ? 'c.color_hex' : "''") . " AS category_color
             FROM events e
             LEFT JOIN event_categories c ON c.id = e.category_id
             LEFT JOIN media_items m ON m.id = e.image_media_id AND m.is_deleted = 0
@@ -981,15 +989,32 @@ if ($method === 'GET' && $sub === '/events') {
         }
         $catNames = trim((string)($r['category_names'] ?? ''));
         $catSlugs = trim((string)($r['category_slugs'] ?? ''));
+        $catColors = trim((string)($r['category_colors'] ?? ''));
         if ($catNames === '') {
             $catNames = trim((string)($r['category_name'] ?? ''));
         }
         if ($catSlugs === '') {
             $catSlugs = trim((string)($r['category_slug'] ?? ''));
         }
+        if ($catColors === '') {
+            $catColors = trim((string)($r['category_color'] ?? ''));
+        }
+        $catNamesArr = $catNames !== '' ? array_values(array_filter(array_map('trim', explode(',', $catNames)), static fn(string $v): bool => $v !== '')) : [];
+        $catSlugsArr = $catSlugs !== '' ? array_values(array_filter(array_map('trim', explode(',', $catSlugs)), static fn(string $v): bool => $v !== '')) : [];
+        $catColorsArr = $catColors !== '' ? array_values(array_filter(array_map(static fn(string $v): string => strtoupper(trim($v)), explode(',', $catColors)), static fn(string $v): bool => preg_match('/^#[0-9A-F]{6}$/', $v) === 1)) : [];
+        $catColorMap = [];
+        foreach ($catSlugsArr as $idx => $slugVal) {
+            $slugKey = strtolower(trim((string)$slugVal));
+            if ($slugKey === '') continue;
+            $colorVal = $catColorsArr[$idx] ?? '';
+            if ($colorVal !== '') {
+                $catColorMap[$slugKey] = $colorVal;
+            }
+        }
         $items[] = [
             'id' => $eventId,
             'title' => (string)($r['title'] ?? ''),
+            'subtitle' => trim((string)($r['subtitle'] ?? '')),
             'text' => (string)($r['description'] ?? ''),
             'date' => (string)($r['event_date'] ?? ''), // legacy compatibility
             'date_from' => $dateFrom,
@@ -1000,8 +1025,10 @@ if ($method === 'GET' && $sub === '/events') {
             'youtube_url' => (string)($r['youtube_url'] ?? ''),
             'category_name' => $catNames,
             'category_slug' => $catSlugs,
-            'category_names' => $catNames !== '' ? array_values(array_filter(array_map('trim', explode(',', $catNames)), static fn(string $v): bool => $v !== '')) : [],
-            'category_slugs' => $catSlugs !== '' ? array_values(array_filter(array_map('trim', explode(',', $catSlugs)), static fn(string $v): bool => $v !== '')) : [],
+            'category_names' => $catNamesArr,
+            'category_slugs' => $catSlugsArr,
+            'category_colors' => $catColorsArr,
+            'category_color_map' => $catColorMap,
             'image_variants' => [],
         ];
     }
@@ -1013,6 +1040,7 @@ if ($method === 'GET' && $sub === '/events') {
               ecm.event_id,
               ec.slug AS category_slug,
               ec.name AS category_name,
+              " . ($hasCategoryColor ? 'ec.color_hex' : "''") . " AS category_color,
               ecm.media_id,
               mi.focus_x AS focus_x,
               mi.focus_y AS focus_y
@@ -1038,6 +1066,7 @@ if ($method === 'GET' && $sub === '/events') {
             $variantsByEvent[$eid][] = [
                 'category_slug' => trim((string)($vr['category_slug'] ?? '')),
                 'category_name' => trim((string)($vr['category_name'] ?? '')),
+                'category_color' => strtoupper(trim((string)($vr['category_color'] ?? ''))),
                 'image_url' => '/media/file?id=' . $mid,
                 'image_focus_x' => ($vr['focus_x'] !== null && $vr['focus_x'] !== '') ? (float)$vr['focus_x'] : null,
                 'image_focus_y' => ($vr['focus_y'] !== null && $vr['focus_y'] !== '') ? (float)$vr['focus_y'] : null,

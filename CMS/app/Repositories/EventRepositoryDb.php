@@ -20,7 +20,7 @@ final class EventRepositoryDb
 
         $sql = "
             SELECT
-              e.id, e.title, e.description, e.event_date, e.event_date_from, e.event_date_to, e.image_media_id,
+              e.id, e.title, e.subtitle, e.description, e.event_date, e.event_date_from, e.event_date_to, e.image_media_id,
               e.youtube_url, e.sort_order, e.is_published, e.is_deleted, e.updated_at,
               GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.name ASC SEPARATOR ', ') AS category_names,
               GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs
@@ -53,7 +53,7 @@ final class EventRepositoryDb
 
         $stmt = $this->pdo->query("
             SELECT
-              e.id, e.title, e.description, e.event_date, e.event_date_from, e.event_date_to, e.image_media_id,
+              e.id, e.title, e.subtitle, e.description, e.event_date, e.event_date_from, e.event_date_to, e.image_media_id,
               e.youtube_url, e.sort_order, e.is_published, e.is_deleted, e.updated_at,
               GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.name ASC SEPARATOR ', ') AS category_names,
               GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs
@@ -81,7 +81,7 @@ final class EventRepositoryDb
 
         $stmt = $this->pdo->prepare("
             SELECT
-              e.id, e.title, e.description, e.event_date, e.event_date_from, e.event_date_to, e.image_media_id,
+              e.id, e.title, e.subtitle, e.description, e.event_date, e.event_date_from, e.event_date_to, e.image_media_id,
               e.youtube_url, e.sort_order, e.is_published, e.is_deleted,
               GROUP_CONCAT(DISTINCT c.name ORDER BY c.sort_order ASC, c.name ASC SEPARATOR ', ') AS category_names,
               GROUP_CONCAT(DISTINCT c.slug ORDER BY c.sort_order ASC, c.slug ASC SEPARATOR ',') AS category_slugs,
@@ -107,6 +107,7 @@ final class EventRepositoryDb
         array $categoryIds,
         array $categoryImageMediaIds,
         string $title,
+        string $subtitle,
         string $description,
         ?string $eventDateFrom,
         ?string $eventDateTo,
@@ -122,6 +123,7 @@ final class EventRepositoryDb
                 $id,
                 $primaryCategoryId !== null ? (int)$primaryCategoryId : null,
                 $title,
+                $subtitle,
                 $description,
                 $legacyDate,
                 $imageMediaId,
@@ -141,6 +143,7 @@ final class EventRepositoryDb
                 SET
                   category_id = :primary_category_id,
                   title = :title,
+                  subtitle = :subtitle,
                   description = :description,
                   event_date_from = :event_date_from,
                   event_date_to = :event_date_to,
@@ -156,6 +159,7 @@ final class EventRepositoryDb
                 ':id' => $id,
                 ':primary_category_id' => $primaryCategoryId,
                 ':title' => $title,
+                ':subtitle' => $subtitle,
                 ':description' => $description,
                 ':event_date_from' => $eventDateFrom,
                 ':event_date_to' => $eventDateTo,
@@ -172,13 +176,14 @@ final class EventRepositoryDb
 
         $stmt = $this->pdo->prepare("
             INSERT INTO events
-              (category_id, title, description, event_date_from, event_date_to, event_date, image_media_id, youtube_url, sort_order, is_published, is_deleted)
+              (category_id, title, subtitle, description, event_date_from, event_date_to, event_date, image_media_id, youtube_url, sort_order, is_published, is_deleted)
             VALUES
-              (:primary_category_id, :title, :description, :event_date_from, :event_date_to, :event_date_legacy, :image_media_id, :youtube_url, :sort_order, :is_published, 0)
+              (:primary_category_id, :title, :subtitle, :description, :event_date_from, :event_date_to, :event_date_legacy, :image_media_id, :youtube_url, :sort_order, :is_published, 0)
         ");
         $stmt->execute([
             ':primary_category_id' => $primaryCategoryId,
             ':title' => $title,
+            ':subtitle' => $subtitle,
             ':description' => $description,
             ':event_date_from' => $eventDateFrom,
             ':event_date_to' => $eventDateTo,
@@ -334,6 +339,9 @@ final class EventRepositoryDb
                 if (!$this->columnExists('events', 'event_date_to')) {
                     $this->pdo->exec("ALTER TABLE `events` ADD COLUMN `event_date_to` DATE NULL AFTER `event_date_from`");
                 }
+                if (!$this->columnExists('events', 'subtitle')) {
+                    $this->pdo->exec("ALTER TABLE `events` ADD COLUMN `subtitle` VARCHAR(255) NULL AFTER `title`");
+                }
                 if ($this->columnExists('events', 'event_date_from') && $this->columnExists('events', 'event_date') && $this->columnExists('events', 'event_date_to')) {
                     $this->pdo->exec("
                         UPDATE `events`
@@ -434,7 +442,7 @@ final class EventRepositoryDb
     {
         $sql = "
             SELECT
-              e.id, e.category_id, e.title, e.description, e.event_date, e.image_media_id,
+              e.id, e.category_id, e.title, e.subtitle, e.description, e.event_date, e.image_media_id,
               e.youtube_url, e.sort_order, e.is_published, e.is_deleted, e.updated_at,
               c.name AS category_name, c.slug AS category_slug
             FROM events e
@@ -457,7 +465,7 @@ final class EventRepositoryDb
     {
         $stmt = $this->pdo->query("
             SELECT
-              e.id, e.category_id, e.title, e.description, e.event_date, e.image_media_id,
+              e.id, e.category_id, e.title, e.subtitle, e.description, e.event_date, e.image_media_id,
               e.youtube_url, e.sort_order, e.is_published, e.is_deleted, e.updated_at,
               c.name AS category_name, c.slug AS category_slug
             FROM events e
@@ -473,7 +481,7 @@ final class EventRepositoryDb
     {
         $stmt = $this->pdo->prepare("
             SELECT
-              e.id, e.category_id, e.title, e.description, e.event_date, e.image_media_id,
+              e.id, e.category_id, e.title, e.subtitle, e.description, e.event_date, e.image_media_id,
               e.youtube_url, e.sort_order, e.is_published, e.is_deleted,
               c.name AS category_name, c.slug AS category_slug
             FROM events e
@@ -498,6 +506,7 @@ final class EventRepositoryDb
         ?int $id,
         ?int $categoryId,
         string $title,
+        string $subtitle,
         string $description,
         ?string $eventDate,
         ?int $imageMediaId,
@@ -511,6 +520,7 @@ final class EventRepositoryDb
                 SET
                   category_id = :category_id,
                   title = :title,
+                  subtitle = :subtitle,
                   description = :description,
                   event_date = :event_date,
                   image_media_id = :image_media_id,
@@ -524,6 +534,7 @@ final class EventRepositoryDb
                 ':id' => $id,
                 ':category_id' => $categoryId,
                 ':title' => $title,
+                ':subtitle' => $subtitle,
                 ':description' => $description,
                 ':event_date' => $eventDate,
                 ':image_media_id' => $imageMediaId,
@@ -536,13 +547,14 @@ final class EventRepositoryDb
 
         $stmt = $this->pdo->prepare("
             INSERT INTO events
-              (category_id, title, description, event_date, image_media_id, youtube_url, sort_order, is_published, is_deleted)
+              (category_id, title, subtitle, description, event_date, image_media_id, youtube_url, sort_order, is_published, is_deleted)
             VALUES
-              (:category_id, :title, :description, :event_date, :image_media_id, :youtube_url, :sort_order, :is_published, 0)
+              (:category_id, :title, :subtitle, :description, :event_date, :image_media_id, :youtube_url, :sort_order, :is_published, 0)
         ");
         $stmt->execute([
             ':category_id' => $categoryId,
             ':title' => $title,
+            ':subtitle' => $subtitle,
             ':description' => $description,
             ':event_date' => $eventDate,
             ':image_media_id' => $imageMediaId,

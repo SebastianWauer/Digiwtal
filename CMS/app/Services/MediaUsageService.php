@@ -137,6 +137,129 @@ final class MediaUsageService
     }
 
     /**
+     * Synchronisiert Media-Usages für ein Event (Hauptbild + Kategorie-Bilder).
+     *
+     * @param array<int,int> $categoryImageMediaIds category_id => media_id
+     */
+    public function syncEventUsages(int $eventId, array $categoryImageMediaIds = []): void
+    {
+        if ($eventId <= 0) return;
+
+        $entityType = 'event';
+        $entityId = $eventId;
+        $beforeIds = $this->listDistinctMediaIdsForEntity($entityType, $entityId);
+
+        $rows = [];
+        foreach ($categoryImageMediaIds as $categoryId => $mediaId) {
+            $cid = (int)$categoryId;
+            $mid = (int)$mediaId;
+            if ($cid <= 0 || $mid <= 0) continue;
+            $rows[] = ['media_id' => $mid, 'field_key' => 'category_image_media_ids[' . $cid . ']'];
+        }
+
+        $rows = $this->dedupeRows($rows);
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->usageRepo->deleteForEntity($entityType, $entityId);
+            $this->usageRepo->insertIgnoreBulk($entityType, $entityId, $rows);
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        $afterIds = [];
+        foreach ($rows as $r) $afterIds[] = (int)$r['media_id'];
+        $this->recalcUsageCounts(array_values(array_unique(array_filter(array_merge($beforeIds, $afterIds), fn($x) => (int)$x > 0))));
+    }
+
+    /**
+     * Entfernt alle Media-Usages eines Entities und recalculates usage_count.
+     */
+    public function clearEntityUsages(string $entityType, int $entityId): void
+    {
+        $entityType = trim($entityType);
+        if ($entityType === '' || $entityId <= 0) return;
+
+        $beforeIds = $this->listDistinctMediaIdsForEntity($entityType, $entityId);
+        if ($beforeIds === []) {
+            return;
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->usageRepo->deleteForEntity($entityType, $entityId);
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        $this->recalcUsageCounts($beforeIds);
+    }
+
+    /**
+     * Baut alle Event-Usages vollständig neu auf (aktive Events).
+     */
+    public function rebuildAllEventUsages(): void
+    {
+        $beforeIds = $this->listDistinctMediaIdsForEntityType('event');
+
+        $rowsByEvent = [];
+        $st = $this->pdo->query("SELECT id FROM events WHERE is_deleted = 0");
+        $events = $st ? $st->fetchAll() : [];
+        foreach (is_array($events) ? $events : [] as $r) {
+            if (!is_array($r)) continue;
+            $eid = (int)($r['id'] ?? 0);
+            if ($eid <= 0) continue;
+            $rowsByEvent[$eid] = $rowsByEvent[$eid] ?? [];
+        }
+
+        if ($this->tableExists('event_category_media')) {
+            $st2 = $this->pdo->query("SELECT event_id, category_id, media_id FROM event_category_media");
+            $rows = $st2 ? $st2->fetchAll() : [];
+            foreach (is_array($rows) ? $rows : [] as $r) {
+                if (!is_array($r)) continue;
+                $eid = (int)($r['event_id'] ?? 0);
+                $cid = (int)($r['category_id'] ?? 0);
+                $mid = (int)($r['media_id'] ?? 0);
+                if ($eid <= 0 || $cid <= 0 || $mid <= 0) continue;
+                $rowsByEvent[$eid][] = [
+                    'media_id' => $mid,
+                    'field_key' => 'category_image_media_ids[' . $cid . ']',
+                ];
+            }
+        }
+
+        foreach ($rowsByEvent as $eid => $rows) {
+            $rowsByEvent[$eid] = $this->dedupeRows($rows);
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $del = $this->pdo->prepare("DELETE FROM media_usages WHERE entity_type = :t");
+            $del->execute([':t' => 'event']);
+            foreach ($rowsByEvent as $eid => $rows) {
+                if ($rows === []) continue;
+                $this->usageRepo->insertIgnoreBulk('event', (int)$eid, $rows);
+            }
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        $afterIds = [];
+        foreach ($rowsByEvent as $rows) {
+            foreach ($rows as $r) {
+                $afterIds[] = (int)($r['media_id'] ?? 0);
+            }
+        }
+        $this->recalcUsageCounts(array_values(array_unique(array_filter(array_merge($beforeIds, $afterIds), fn($x) => (int)$x > 0))));
+    }
+
+    /**
      * Rekursiver Scan (Arrays/Strings) nach /media/file?id=123 bzw /media/thumb?id=123
      *
      * @param mixed $node
@@ -174,6 +297,37 @@ final class MediaUsageService
     }
 
     /**
+     * @param array<int,array{media_id:int,field_key:string}> $rows
+     * @return array<int,array{media_id:int,field_key:string}>
+     */
+    private function dedupeRows(array $rows): array
+    {
+        $uniq = [];
+        foreach ($rows as $r) {
+            $mid = (int)($r['media_id'] ?? 0);
+            $fk = (string)($r['field_key'] ?? '');
+            if ($mid <= 0 || $fk === '') continue;
+            $uniq[$mid . '|' . $fk] = ['media_id' => $mid, 'field_key' => $fk];
+        }
+        return array_values($uniq);
+    }
+
+    /**
+     * @param array<int,int> $mediaIds
+     */
+    private function recalcUsageCounts(array $mediaIds): void
+    {
+        $all = array_values(array_unique(array_filter($mediaIds, fn($x) => (int)$x > 0)));
+        if ($all === []) return;
+
+        $counts = $this->usageRepo->countForMediaBulk($all);
+        foreach ($all as $mid) {
+            $c = (int)($counts[$mid] ?? 0);
+            $this->mediaRepo->setUsageCount((int)$mid, $c);
+        }
+    }
+
+    /**
      * @return array<int,int>
      */
     private function listDistinctMediaIdsForEntity(string $entityType, int $entityId): array
@@ -198,5 +352,41 @@ final class MediaUsageService
             }
         }
         return array_values(array_unique($out));
+    }
+
+    /**
+     * @return array<int,int>
+     */
+    private function listDistinctMediaIdsForEntityType(string $entityType): array
+    {
+        $entityType = trim($entityType);
+        if ($entityType === '') return [];
+
+        $st = $this->pdo->prepare("
+            SELECT DISTINCT media_id
+            FROM media_usages
+            WHERE entity_type = :t
+        ");
+        $st->execute([':t' => $entityType]);
+        $rows = $st->fetchAll();
+
+        $out = [];
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                if (!is_array($r)) continue;
+                $mid = (int)($r['media_id'] ?? 0);
+                if ($mid > 0) $out[] = $mid;
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    private function tableExists(string $table): bool
+    {
+        $table = trim($table);
+        if ($table === '') return false;
+        $st = $this->pdo->prepare("SHOW TABLES LIKE :t");
+        $st->execute([':t' => $table]);
+        return (bool)$st->fetchColumn();
     }
 }
