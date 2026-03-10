@@ -100,7 +100,7 @@ function renderErrorPage(int $statusCode, string $siteName, string $title, strin
     header('Pragma: no-cache');
 
     $pageTitle = $title;
-    $fullTitle = $title . ' Ã¢â‚¬â€œ ' . $siteName;
+    $fullTitle = $title . ' ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ ' . $siteName;
     $slug = 'error';
     $navItems = [];
     $blocks = [
@@ -132,7 +132,7 @@ function render404(string $siteName = 'Website'): never {
     renderErrorPage(
         404,
         $siteName,
-        '404 Ã¢â‚¬â€œ Seite nicht gefunden',
+        '404 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ Seite nicht gefunden',
         'Die angeforderte Seite existiert nicht oder wurde verschoben.'
     );
 }
@@ -141,8 +141,8 @@ function render500(string $siteName = 'Website'): never {
     renderErrorPage(
         500,
         $siteName,
-        '500 Ã¢â‚¬â€œ Interner Serverfehler',
-        'Der Server ist momentan nicht erreichbar. Bitte versuche es spÃƒÂ¤ter erneut.'
+        '500 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ Interner Serverfehler',
+        'Der Server ist momentan nicht erreichbar. Bitte versuche es spÃƒÆ’Ã‚Â¤ter erneut.'
     );
 }
 
@@ -478,7 +478,7 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
             'handled' => true,
             'form_id' => '__global',
             'status' => 'error',
-            'message' => 'Aus Sicherheitsgruenden ist das Kontaktformular nur ueber HTTPS verfuegbar.',
+            'message' => 'Aus Sicherheitsgründen ist das Kontaktformular nur über HTTPS verfügbar.',
             'values' => [],
         ];
     }
@@ -509,7 +509,7 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
 
     $honey = trim((string)($post['website'] ?? ''));
     if ($honey !== '') {
-        return $fail('Nachricht konnte nicht gesendet werden. Bitte spaeter erneut versuchen.');
+        return $fail('Nachricht konnte nicht gesendet werden. Bitte später erneut versuchen.');
     }
 
     $ts = (int)($post['_cf_ts'] ?? 0);
@@ -533,7 +533,7 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
     }
     $capAnswerRaw = trim((string)($post['captcha_answer'] ?? ''));
     if ($capAnswerRaw === '' || preg_match('/^-?\d+$/', $capAnswerRaw) !== 1) {
-        return $fail('Bitte die Sicherheitsfrage loesen.');
+        return $fail('Bitte die Sicherheitsfrage lösen.');
     }
     if ((int)$capAnswerRaw !== ($capA + $capB)) {
         return $fail('Die Antwort auf die Sicherheitsfrage ist nicht korrekt.');
@@ -545,7 +545,7 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
     if (contactTurnstileEnabled()) {
         $turnstileToken = trim((string)($post['cf-turnstile-response'] ?? ''));
         if ($turnstileToken === '') {
-            return $fail('Bitte bestaetigen Sie den Bot-Schutz.');
+            return $fail('Bitte bestätigen Sie den Bot-Schutz.');
         }
         $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
         if (!verifyTurnstileToken($turnstileToken, $ip)) {
@@ -560,14 +560,14 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
 
     $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
     if (!contactRateLimitAllow($ip)) {
-        return $fail('Zu viele Anfragen. Bitte spaeter erneut versuchen.');
+        return $fail('Zu viele Anfragen. Bitte später erneut versuchen.');
     }
 
     if (mb_strlen($values['name']) < 2 || mb_strlen($values['name']) > 120) {
-        return $fail('Bitte einen gueltigen Namen eingeben.');
+        return $fail('Bitte einen gültigen Namen eingeben.');
     }
     if (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
-        return $fail('Bitte eine gueltige E-Mail-Adresse eingeben.');
+        return $fail('Bitte eine gültige E-Mail-Adresse eingeben.');
     }
     if (mb_strlen($values['message']) < 10 || mb_strlen($values['message']) > 4000) {
         return $fail('Bitte Nachricht mit mindestens 10 Zeichen eingeben.');
@@ -587,7 +587,7 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
     }
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
         frontendDebugLog('[FRONTEND] contact form recipient missing');
-        return $fail('Kontaktformular ist aktuell nicht verfuegbar.');
+        return $fail('Kontaktformular ist aktuell nicht verfügbar.');
     }
 
     $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
@@ -607,10 +607,10 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
     $encrypted = encryptContactPayload($plain);
     if (!is_array($encrypted)) {
         frontendDebugLog('[FRONTEND] contact payload encryption unavailable');
-        return $fail('Kontaktformular ist aktuell nicht verfuegbar (Verschluesselung fehlt).');
+        return $fail('Kontaktformular ist aktuell nicht verfügbar (Verschlüsselung fehlt).');
     }
 
-    $subject = '[Kontakt] ' . $siteName . ' - verschluesselte Anfrage';
+    $subject = '[Kontakt] ' . $siteName . ' - verschlüsselte Anfrage';
     $body = "Encrypted contact payload\n"
         . "cipher: " . $encrypted['cipher'] . "\n"
         . "env_key_b64: " . $encrypted['env_key_b64'] . "\n"
@@ -627,7 +627,7 @@ function processContactFormSubmission(array $post, string $slug, string $siteNam
     $sent = @mail($to, $subject, $body, implode("\r\n", $headers));
     if (!$sent) {
         frontendDebugLog('[FRONTEND] contact mail send failed');
-        return $fail('Nachricht konnte nicht gesendet werden. Bitte spaeter erneut versuchen.');
+        return $fail('Nachricht konnte nicht gesendet werden. Bitte später erneut versuchen.');
     }
 
     return [
@@ -738,7 +738,7 @@ function enrichBlockFocusWithMedia(array $blocks, CmsApiClient $client, string $
                 if (!isset($value[$targetField]) || (string)$value[$targetField] === '') {
                     $value[$targetField] = $mediaUrl;
                 }
-                // Bei Image-Blocks mit media_id zusÃƒÂ¤tzlich "url" setzen.
+                // Bei Image-Blocks mit media_id zusÃƒÆ’Ã‚Â¤tzlich "url" setzen.
                 if ($key === 'media_id' && (!isset($value['url']) || (string)$value['url'] === '')) {
                     $value['url'] = $mediaUrl;
                 }
@@ -1028,3 +1028,4 @@ try {
 } catch (Throwable) {
     render500($siteName);
 }
+

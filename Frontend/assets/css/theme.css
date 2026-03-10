@@ -705,6 +705,47 @@ nav a[aria-current="page"] .site-nav__active-icon-wrap {
   margin-bottom: 0.85rem;
 }
 
+.block-events__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.block-events__head h2 {
+  margin-bottom: 0;
+}
+
+.block-events__view-switch {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.block-events__view-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 0.38rem 0.68rem;
+  cursor: pointer;
+}
+
+.block-events__view-btn + .block-events__view-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.block-events__view-btn.is-active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
 .block-events__filters {
   display: grid;
   gap: 0.65rem;
@@ -734,6 +775,228 @@ nav a[aria-current="page"] .site-nav__active-icon-wrap {
   grid-template-columns: 1fr;
 }
 
+.block-events__calendar-view {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.8rem;
+}
+
+.block-events__calendar-toolbar {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.block-events__cal-nav {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  height: 36px;
+  cursor: pointer;
+}
+
+.block-events__cal-title {
+  text-align: center;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.block-events__calendar-months {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.block-events__month {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.45rem 0.5rem;
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.block-events__month.is-active {
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  transform: scale(1.01);
+}
+
+.block-events__month.is-side {
+  opacity: 0.55;
+  transform: scale(0.985);
+  filter: saturate(0.85);
+}
+
+.block-events__month-head {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.32rem;
+}
+
+.block-events__cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 0.24rem;
+}
+
+.block-events__cal-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.block-events__cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+  overflow: visible;
+}
+
+.block-events__cal-wd {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  padding: 0.1rem 0;
+  border: 1px solid transparent;
+}
+
+.block-events__cal-cell {
+  min-height: 62px;
+  border: 1px solid var(--color-border);
+  border-right: 0;
+  border-radius: 0;
+  padding: 0.2rem 0.22rem 0.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.12rem;
+  background: #fff;
+  position: relative;
+  color: var(--color-text);
+  overflow: visible;
+  z-index: 1;
+}
+
+.block-events__cal-week > .block-events__cal-cell:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.block-events__cal-week > .block-events__cal-cell:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  border-right: 1px solid var(--color-border);
+}
+
+.block-events__cal-cell.is-empty {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.block-events__cal-cell.is-out-month {
+  background: #f8fafc;
+}
+
+.block-events__cal-cell.is-out-month .block-events__cal-day {
+  color: #94a3b8;
+}
+
+.block-events__cal-cell.has-event {
+  border-color: #dbe4ef;
+  color: #111827;
+}
+
+.block-events__cal-cell.has-bar-start {
+  z-index: 4;
+}
+
+.block-events__cal-day {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1;
+  text-align: left;
+}
+
+.block-events__cal-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: 16px;
+  position: relative;
+  z-index: 3;
+  overflow: visible;
+}
+
+.block-events__cal-bar {
+  display: flex;
+  align-items: center;
+  width: calc((var(--bar-span, 1) * 100%) + ((var(--bar-span, 1) - 1) * 1px));
+  height: 16px;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--bar-color, var(--color-primary));
+  color: #fff;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.block-events__cal-bar.is-continued-left {
+  margin-left: -0.22rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding-left: 0.2rem;
+}
+
+.block-events__cal-bar.is-continued-right {
+  margin-right: -0.22rem;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-right: 0.2rem;
+}
+
+.block-events__cal-bar-label {
+  display: block;
+  font-size: 0.6rem;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 767px) {
+  .block-events__calendar-months {
+    gap: 0.55rem;
+  }
+
+  .block-events__cal-cell {
+    min-height: 50px;
+    padding: 0.12rem;
+  }
+
+  .block-events__cal-bar {
+    height: 12px;
+    padding: 0 0.2rem;
+  }
+
+  .block-events__cal-bar-label {
+    font-size: 0.52rem;
+  }
+}
+
 .block-events__item {
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -753,6 +1016,12 @@ nav a[aria-current="page"] .site-nav__active-icon-wrap {
   object-position: var(--event-img-pos, 50% 50%);
   display: block;
   z-index: 1;
+  opacity: 1;
+  transition: opacity 0.22s ease;
+}
+
+.block-events__item img.is-swapping {
+  opacity: 0.22;
 }
 
 .block-events__item.is-past img {
@@ -915,9 +1184,16 @@ nav a[aria-current="page"] .site-nav__active-icon-wrap {
 }
 
 .block-events__body h3 {
-  margin: 0.45rem 0 0.35rem;
+  margin: 0.1rem 0 0.35rem;
   font-size: 1.08rem;
   color: #fff;
+}
+
+.block-events__item-subtitle {
+  margin: 0.1rem 0 0.04rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: rgba(241, 245, 249, 0.92);
 }
 
 .block-events__body p {

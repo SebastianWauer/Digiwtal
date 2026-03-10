@@ -81,7 +81,7 @@ if ($headerLogoUrl === '' && isset($settings['logo_media_id']) && (int)$settings
 
 if (!function_exists('render')) {
     http_response_code(500);
-    echo 'Frontend-Renderer nicht verfuegbar.';
+    echo 'Frontend-Renderer nicht verfügbar.';
     return;
 }
 
@@ -100,3 +100,4 @@ render('templates/layout.php', compact(
     'assetBaseUrl',
     'previewMainOnly'
 ));
+
