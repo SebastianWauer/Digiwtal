@@ -44,7 +44,7 @@ if (!function_exists('buildNavTree')) {
             }
             
             // Skip protocol-relative URLs (security)
-            if (str_starts_with($url, '//')) {
+            if (substr($url, 0, 2) === '//') {
                 continue;
             }
             
@@ -65,7 +65,8 @@ if (!function_exists('buildNavTree')) {
                 'title' => (string)($item['title'] ?? 'Untitled'),
                 'url' => $url,
                 'slug' => (string)($item['slug'] ?? ''),
-                'nav_order' => (int)($item['nav_order'] ?? 9999),
+                'is_home' => !empty($item['is_home']),
+                'nav_order' => (int)($item['nav_order'] ?? $item['sort_order'] ?? 9999),
                 'children' => buildNavTree($items, $nodeId, array_merge($visitedIds, [$nodeId]))
             ];
             
@@ -125,25 +126,49 @@ if (!function_exists('markNavActive')) {
  * Render navigation tree recursively
  */
 if (!function_exists('renderNavTree')) {
-    function renderNavTree(array $tree): void {
+    function renderNavTree(array $tree, string $activeFaviconUrl = '', string $currentPath = '/', string $currentSlug = ''): void {
         if (empty($tree)) {
             return;
         }
+        $normalize = static function (string $path): string {
+            $path = trim($path);
+            if ($path === '') return '/';
+            if ($path[0] !== '/') $path = '/' . $path;
+            $path = preg_replace('#/+#', '/', $path) ?: $path;
+            if ($path !== '/') $path = rtrim($path, '/');
+            return $path === '' ? '/' : $path;
+        };
         
         echo '<ul>';
         foreach ($tree as $node) {
+            $nodePath = $normalize((string)($node['url'] ?? '/'));
+            $slugNode = trim((string)($node['slug'] ?? ''), '/');
+            $slugCurrent = trim($currentSlug, '/');
+            $selfByPath = ($nodePath === $currentPath)
+                || ($currentPath === '/' && !empty($node['is_home']))
+                || ($currentPath === '/' && $slugCurrent !== '' && $nodePath === $normalize('/' . $slugCurrent))
+                || ($slugNode !== '' && $slugCurrent !== '' && $slugNode === $slugCurrent);
+            $selfActive = ($node['active_self'] ?? false) || $selfByPath;
+            $anyActive = ($node['active_any'] ?? false) || $selfByPath;
+
             echo '<li>';
             echo '<a href="' . e($node['url']) . '"';
-            if ($node['active_any'] ?? false) {
+            if ($anyActive) {
                 echo ' class="active"';
             }
-            if ($node['active_self'] ?? false) {
+            if ($selfActive) {
                 echo ' aria-current="page"';
             }
-            echo '>' . e($node['title']) . '</a>';
+            echo '>';
+            if ($activeFaviconUrl !== '') {
+                echo '<span class="site-nav__active-icon-wrap" aria-hidden="true">';
+                echo '<img class="site-nav__active-icon" src="' . e($activeFaviconUrl) . '" alt="" loading="lazy">';
+                echo '</span>';
+            }
+            echo '<span>' . e($node['title']) . '</span></a>';
             
             if (!empty($node['children'])) {
-                renderNavTree($node['children']);
+                renderNavTree($node['children'], $activeFaviconUrl, $currentPath, $currentSlug);
             }
             
             echo '</li>';
@@ -166,12 +191,33 @@ foreach ($navItems as $item) {
 // Build tree, mark active states, and render navigation
 $tree = buildNavTree($navItems, $rootParent);
 $tree = markNavActive($tree, $slug ?? 'home');
+$activeFaviconUrl = isset($faviconUrl) && is_string($faviconUrl) ? trim($faviconUrl) : '';
+$reqPathRaw = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+$currentPath = is_string($reqPathRaw) ? trim($reqPathRaw) : '/';
+if ($currentPath === '') $currentPath = '/';
+if ($currentPath[0] !== '/') $currentPath = '/' . $currentPath;
+$currentPath = preg_replace('#/+#', '/', $currentPath) ?: $currentPath;
+if (substr($currentPath, 0, 10) === '/index.php') {
+    $currentPath = (string)substr($currentPath, strlen('/index.php'));
+    if ($currentPath === '') $currentPath = '/';
+}
+if ($currentPath !== '/') $currentPath = rtrim($currentPath, '/');
+if ($activeFaviconUrl === '') {
+    $assetBaseUrl = isset($assetBaseUrl) && is_string($assetBaseUrl) ? rtrim($assetBaseUrl, '/') : '';
+    $activeFaviconUrl = ($assetBaseUrl !== '' ? $assetBaseUrl : '') . '/favicon.ico';
+}
 ?>
-<header>
-    <div><a href="/"><?php echo e($siteName ?? 'Website'); ?></a></div>
+<header class="site-header">
+    <a class="site-brand" href="/" aria-label="<?php echo e($siteName ?? 'Website'); ?>">
+        <?php if (!empty($headerLogoUrl)): ?>
+            <img src="<?php echo e((string)$headerLogoUrl); ?>" alt="<?php echo e($siteName ?? 'Website'); ?>">
+        <?php else: ?>
+            <span><?php echo e($siteName ?? 'Website'); ?></span>
+        <?php endif; ?>
+    </a>
     <?php if (!empty($tree)): ?>
-    <nav>
-        <?php renderNavTree($tree); ?>
+    <nav class="site-nav" aria-label="Hauptnavigation">
+        <?php renderNavTree($tree, $activeFaviconUrl, $currentPath, (string)($slug ?? '')); ?>
     </nav>
     <?php endif; ?>
 </header>

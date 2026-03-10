@@ -38,13 +38,13 @@ require_once dirname(__DIR__, 2) . '/app/CmsApiClient.php';
 $baseUrl  = (string)(getenv('CMS_API_URL')   ?: '');
 $token    = (string)(getenv('CMS_API_TOKEN') ?: '');
 $timeout  = (int)(getenv('CMS_TIMEOUT')      ?: 5);
-$cacheTtl = (int)(getenv('CMS_CACHE_TTL') ?: 300);
+$cacheTtl = 0; // Farben aus CMS immer live ziehen
 
 // -------------------------------------------------------
 // Defaults
 // -------------------------------------------------------
 $colorPrimary   = '#2563eb';
-$colorSecondary = '#64748b';
+$colorSecondary = $colorPrimary;
 $colorTertiary  = '#f59e0b';
 
 // -------------------------------------------------------
@@ -72,6 +72,8 @@ if ($baseUrl !== '') {
         $c = (string)($settings['brand_color_secondary'] ?? '');
         if (preg_match('/^#[0-9a-fA-F]{6}$/', $c)) {
             $colorSecondary = strtolower($c);
+        } else {
+            $colorSecondary = $colorPrimary;
         }
         
         // Validate and apply brand_color_tertiary
@@ -88,9 +90,17 @@ if ($baseUrl !== '') {
 // Output CSS
 // -------------------------------------------------------
 header('Content-Type: text/css; charset=utf-8');
-header('Cache-Control: public, max-age=300, stale-while-revalidate=60');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
 ?>:root {
-  --color-primary:   <?php echo $colorPrimary; ?>;
-  --color-secondary: <?php echo $colorSecondary; ?>;
-  --color-tertiary:  <?php echo $colorTertiary; ?>;
+  /* DB-fed variables consumed by theme.css */
+  --db-color-primary:   <?php echo $colorPrimary; ?>;
+  --db-color-secondary: <?php echo $colorSecondary; ?>;
+  --db-color-tertiary:  <?php echo $colorTertiary; ?>;
+
+  /* Legacy compatibility variables */
+  --color-primary:   var(--db-color-primary);
+  --color-secondary: var(--db-color-secondary);
+  --color-tertiary:  var(--db-color-tertiary);
+  --color-accent:    var(--db-color-tertiary);
 }

@@ -14,5 +14,9 @@
             <?php endforeach; ?>
         </nav>
     <?php endif; ?>
-    <p>&copy; <?php echo gmdate('Y'); ?> <?php echo e($siteName ?? 'Website'); ?></p>
+    <p>
+        &copy; <?php echo date('Y'); ?> <?php echo e($siteName ?? 'Website'); ?>.
+        Alle Rechte vorbehalten.
+        Website entwickelt von <a href="https://digiwtal.de" target="_blank" rel="noopener">DigiWtal</a>.
+    </p>
 </footer>

@@ -38,14 +38,8 @@ if (!empty($hero['image_url'])) {
     $styleParts[] = 'background-position:50% 50% !important';
 
     if (isset($hero['image_url_focus_x']) || isset($hero['image_url_focus_y'])) {
-        $fx = isset($hero['image_url_focus_x']) ? (float)$hero['image_url_focus_x'] : 0.0;
-        $fy = isset($hero['image_url_focus_y']) ? (float)$hero['image_url_focus_y'] : 0.0;
-        if ($fx < -1.0) $fx = -1.0;
-        if ($fx > 1.0)  $fx = 1.0;
-        if ($fy < -1.0) $fy = -1.0;
-        if ($fy > 1.0)  $fy = 1.0;
-        $px = (int)round((($fx + 1.0) / 2.0) * 100);
-        $py = (int)round((($fy + 1.0) / 2.0) * 100);
+        $px = focus_to_percent($hero['image_url_focus_x'] ?? null, 50.0);
+        $py = focus_to_percent($hero['image_url_focus_y'] ?? null, 50.0);
         $styleParts[] = 'background-position:' . $px . '% ' . $py . '% !important';
     }
 }

@@ -1,6 +1,41 @@
-<h1><?php echo e($pageTitle ?? 'Seite'); ?></h1>
 <?php
-foreach ($blocks ?? [] as $block):
+$pageTitle = (string)($pageTitle ?? 'Seite');
+$pageSubtitle = trim((string)($pageSubtitle ?? ''));
+$blocksList = is_array($blocks ?? null) ? $blocks : [];
+$contactFormStates = is_array($contactFormStates ?? null) ? $contactFormStates : [];
+$contactTurnstileSiteKey = (isset($contactTurnstileSiteKey) && is_string($contactTurnstileSiteKey)) ? trim($contactTurnstileSiteKey) : '';
+$publicSettings = is_array($publicSettings ?? null) ? $publicSettings : [];
+$currentSlug = trim((string)($slug ?? ''), '/');
+$headingRendered = false;
+
+$hasHero = false;
+foreach ($blocksList as $candidateBlock) {
+    if (!is_array($candidateBlock)) {
+        continue;
+    }
+    if ((string)($candidateBlock['type'] ?? '') === 'hero') {
+        $hasHero = true;
+        break;
+    }
+}
+?>
+<?php
+if (!$hasHero):
+?>
+<section class="page-headline-wrap">
+    <h1 class="page-title"><?php echo e($pageTitle); ?></h1>
+    <?php if ($pageSubtitle !== ''): ?>
+    <p class="page-subtitle"><?php echo e($pageSubtitle); ?></p>
+    <?php endif; ?>
+</section>
+<?php
+endif;
+
+foreach ($blocksList as $blockIndex => $block):
+    if (!is_array($block)) {
+        continue;
+    }
+    $block['_render_index'] = (int)$blockIndex;
     $type = (string)($block['type'] ?? '');
     $data = $block['data'] ?? [];
     if (!is_array($data)) {
@@ -23,9 +58,24 @@ foreach ($blocks ?? [] as $block):
         'faq'     => 'themes/default/blocks/faq.php',
         'gallery' => 'themes/default/blocks/gallery.php',
         'video'   => 'themes/default/blocks/video.php',
+        'contact_form' => 'themes/default/blocks/contact_form.php',
+        'imprint' => 'themes/default/blocks/imprint.php',
+        'events' => 'themes/default/blocks/events.php',
         default   => 'templates/blocks/unknown.php',
     };
     
-    render($template, compact('block', 'data'));
+    render($template, compact('block', 'data', 'contactFormStates', 'currentSlug', 'contactTurnstileSiteKey', 'publicSettings'));
+
+    if (!$headingRendered && $type === 'hero') {
+        $headingRendered = true;
+        ?>
+        <section class="page-headline-wrap">
+            <h1 class="page-title"><?php echo e($pageTitle); ?></h1>
+            <?php if ($pageSubtitle !== ''): ?>
+            <p class="page-subtitle"><?php echo e($pageSubtitle); ?></p>
+            <?php endif; ?>
+        </section>
+        <?php
+    }
 endforeach;
 ?>

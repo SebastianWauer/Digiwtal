@@ -1,92 +1,102 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+<?php
+declare(strict_types=1);
 
-  <?php
-  $e = fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+if (!function_exists('render')) {
+    $viewHelper = __DIR__ . '/../../app/view.php';
+    if (is_file($viewHelper)) {
+        require_once $viewHelper;
+    }
+}
 
-  $metaTitle  = (string)($seo['meta_title']       ?? '');
-  $metaDesc   = (string)($seo['meta_description'] ?? '');
-  $robots     = (string)($seo['robots']           ?? '');
-  $canonical  = (string)($seo['canonical_url']    ?? '');
-  $ogTitle    = (string)($seo['og_title']         ?? '') ?: $metaTitle;
-  $ogDesc     = (string)($seo['og_description']   ?? '') ?: $metaDesc;
-  $ogImage    = (string)($seo['og_image_url']     ?? '');
-  $faviconUrl = isset($faviconUrl) ? trim((string)$faviconUrl) : '';
+$siteName = (string)($siteName ?? ($settings['site_title'] ?? $settings['site_name'] ?? 'Website'));
 
-  // Nav-Helpers
-  $navHref  = fn(array $item): string => !empty($item['is_home']) ? '/' : (string)($item['slug'] ?? '/');
-  $navLabel = function(array $item): string {
-      $l = (string)($item['nav_label'] ?? '');
-      return $l !== '' ? $l : ((string)($item['title'] ?? '') ?: (string)($item['slug'] ?? ''));
-  };
-  $isActive = function(array $item) use ($page): bool {
-      // Home-Item ist aktiv wenn aktuelle Seite ebenfalls is_home=1
-      if (!empty($item['is_home']) && !empty($page['is_home'])) return true;
-      return (string)($item['slug'] ?? '') === (string)($page['slug'] ?? '');
-  };
-  ?>
+$pageTitle = trim((string)($pageTitle ?? ''));
+if ($pageTitle === '') {
+    $pageTitle = trim((string)($page['frontend_title'] ?? ''));
+}
+if ($pageTitle === '') {
+    $pageTitle = (string)($page['title'] ?? 'Seite');
+}
 
-  <title><?= $e($metaTitle ?: (string)($page['frontend_title'] ?: $page['title'] ?? '')) ?></title>
+$pageSubtitle = trim((string)($pageSubtitle ?? ($page['subtitle'] ?? '')));
 
-  <?php if ($metaDesc !== ''): ?>
-  <meta name="description" content="<?= $e($metaDesc) ?>">
-  <?php endif; ?>
+$internalTitle = trim((string)($page['title'] ?? ''));
+if ($internalTitle === '') {
+    $internalTitle = $pageTitle;
+}
+$title = (string)($title ?? ($internalTitle . ' - ' . $siteName));
 
-  <?php if ($robots !== ''): ?>
-  <meta name="robots" content="<?= $e($robots) ?>">
-  <?php endif; ?>
+$slug = trim((string)($slug ?? ($page['slug'] ?? 'home')), '/');
+if ($slug === '') {
+    $slug = 'home';
+}
 
-  <?php if ($canonical !== ''): ?>
-  <link rel="canonical" href="<?= $e($canonical) ?>">
-  <?php endif; ?>
+$blocks = is_array($blocks ?? null) ? $blocks : (is_array($page['blocks'] ?? null) ? $page['blocks'] : []);
+$contactFormStates = is_array($contactFormStates ?? null) ? $contactFormStates : [];
+$seo = is_array($seo ?? null) ? $seo : [];
 
-  <?php if ($ogTitle !== ''): ?>
-  <meta property="og:title" content="<?= $e($ogTitle) ?>">
-  <?php endif; ?>
+if (!isset($navItems) || !is_array($navItems)) {
+    $navItems = [];
+    if (is_array($nav['header'] ?? null)) {
+        foreach ($nav['header'] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $item['area'] = 'header';
+            $navItems[] = $item;
+        }
+    }
+    if (is_array($nav['footer'] ?? null)) {
+        foreach ($nav['footer'] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $item['area'] = 'footer';
+            $navItems[] = $item;
+        }
+    }
+}
 
-  <?php if ($ogDesc !== ''): ?>
-  <meta property="og:description" content="<?= $e($ogDesc) ?>">
-  <?php endif; ?>
+$faviconUrl = trim((string)($faviconUrl ?? ''));
+if ($faviconUrl === '' && isset($settings['favicon_url']) && is_string($settings['favicon_url'])) {
+    $faviconUrl = trim($settings['favicon_url']);
+}
+if ($faviconUrl === '' && isset($settings['favicon_media_id']) && (int)$settings['favicon_media_id'] > 0) {
+    $faviconUrl = '/media/file?id=' . (int)$settings['favicon_media_id'];
+}
 
-  <?php if ($ogImage !== ''): ?>
-  <meta property="og:image" content="<?= $e($ogImage) ?>">
-  <?php endif; ?>
+$headerLogoUrl = trim((string)($headerLogoUrl ?? ''));
+if ($headerLogoUrl === '' && isset($settings['cms_logo_light_url']) && is_string($settings['cms_logo_light_url'])) {
+    $headerLogoUrl = trim($settings['cms_logo_light_url']);
+}
+if ($headerLogoUrl === '' && isset($settings['logo_url']) && is_string($settings['logo_url'])) {
+    $headerLogoUrl = trim($settings['logo_url']);
+}
+if ($headerLogoUrl === '' && isset($settings['cms_logo_light_media_id']) && (int)$settings['cms_logo_light_media_id'] > 0) {
+    $headerLogoUrl = '/media/file?id=' . (int)$settings['cms_logo_light_media_id'];
+}
+if ($headerLogoUrl === '' && isset($settings['logo_media_id']) && (int)$settings['logo_media_id'] > 0) {
+    $headerLogoUrl = '/media/file?id=' . (int)$settings['logo_media_id'];
+}
 
-  <?php if ($faviconUrl !== ''): ?>
-  <link rel="icon" href="<?= $e($faviconUrl) ?>">
-  <?php endif; ?>
+if (!function_exists('render')) {
+    http_response_code(500);
+    echo 'Frontend-Renderer nicht verfuegbar.';
+    return;
+}
 
-  <link rel="stylesheet" href="/assets/css/theme.css">
-
-</head>
-<body>
-
-<?php if (!empty($nav['header'])): ?>
-<header>
-  <nav>
-    <?php foreach ($nav['header'] as $item): ?>
-      <a href="<?= $e($navHref($item)) ?>"<?= $isActive($item) ? ' aria-current="page"' : '' ?>><?= $e($navLabel($item)) ?></a>
-    <?php endforeach; ?>
-  </nav>
-</header>
-<?php endif; ?>
-
-<?php foreach ($blocks as $block): ?>
-  <?= $renderer->renderBlock($block) ?>
-<?php endforeach; ?>
-
-<?php if (!empty($nav['footer'])): ?>
-<footer>
-  <nav>
-    <?php foreach ($nav['footer'] as $item): ?>
-      <a href="<?= $e($navHref($item)) ?>"><?= $e($navLabel($item)) ?></a>
-    <?php endforeach; ?>
-  </nav>
-</footer>
-<?php endif; ?>
-
-</body>
-</html>
+render('templates/layout.php', compact(
+    'siteName',
+    'title',
+    'pageTitle',
+    'pageSubtitle',
+    'blocks',
+    'contactFormStates',
+    'navItems',
+    'slug',
+    'seo',
+    'faviconUrl',
+    'headerLogoUrl',
+    'assetBaseUrl',
+    'previewMainOnly'
+));

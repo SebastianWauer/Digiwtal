@@ -102,6 +102,26 @@ class CmsApiClient
     }
 
     /**
+     * GET /events
+     */
+    public function getEvents(array $categorySlugs = [], int $limit = 6, bool $includePast = false): array
+    {
+        $query = [
+            'limit' => max(1, min(500, $limit)),
+            'include_past' => $includePast ? 1 : 0,
+        ];
+        $normalized = array_values(array_unique(array_filter(array_map(static function (string $v): string {
+            $v = trim($v);
+            $v = preg_replace('/[^a-z0-9-]+/i', '-', strtolower($v)) ?? '';
+            return trim($v, '-');
+        }, $categorySlugs), static fn(string $v): bool => $v !== '')));
+        if ($normalized !== []) {
+            $query['categories'] = implode(',', $normalized);
+        }
+        return $this->get('/events', $query);
+    }
+
+    /**
      * GET /sitemap.xml on CMS frontend host.
      */
     public function getSitemapXml(?string $sitemapUrl = null): string
