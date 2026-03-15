@@ -96,10 +96,13 @@ class ModuleCombinator
 
     private function isIgnoredMacArtifact(string $filename, array $parts): bool
     {
-        if ($filename === '.DS_Store' || str_starts_with($filename, '._')) {
+        $macFiles = ['.DS_Store', '.AppleDouble', '.LSOverride'];
+        $macDirs = ['__MACOSX', '.Spotlight-V100', '.Trashes', '.fseventsd'];
+
+        if (in_array($filename, $macFiles, true) || str_starts_with($filename, '._')) {
             return true;
         }
 
-        return in_array('__MACOSX', $parts, true);
+        return count(array_intersect($parts, $macDirs)) > 0;
     }
 }

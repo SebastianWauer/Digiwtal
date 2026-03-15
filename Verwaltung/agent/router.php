@@ -74,9 +74,12 @@ if (!function_exists('ignore_artifact')) {
             return true;
         }
 
-        return $filename === '.DS_Store'
+        $macFiles = ['.DS_Store', '.AppleDouble', '.LSOverride'];
+        $macDirs = ['__MACOSX', '.Spotlight-V100', '.Trashes', '.fseventsd'];
+
+        return in_array($filename, $macFiles, true)
             || str_starts_with($filename, '._')
-            || in_array('__MACOSX', $parts, true);
+            || count(array_intersect($parts, $macDirs)) > 0;
     }
 }
 

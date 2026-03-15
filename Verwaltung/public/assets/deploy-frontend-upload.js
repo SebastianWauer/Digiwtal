@@ -65,7 +65,11 @@
         var normalized = path.replace(/\\/g, '/');
         var parts = normalized.split('/');
         var filename = parts[parts.length - 1] || '';
-        return filename === '.DS_Store' || filename.indexOf('._') === 0 || parts.indexOf('__MACOSX') !== -1;
+        var macFiles = ['.DS_Store', '.AppleDouble', '.LSOverride'];
+        var macDirs = ['__MACOSX', '.Spotlight-V100', '.Trashes', '.fseventsd'];
+        return macFiles.indexOf(filename) !== -1
+            || filename.indexOf('._') === 0
+            || macDirs.some(function (dir) { return parts.indexOf(dir) !== -1; });
     }
 
     function stripLeadingDirectory(path) {

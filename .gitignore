@@ -2,6 +2,11 @@
 .DS_Store
 ._*
 __MACOSX/
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
 
 # IDE / editor
 .idea/
