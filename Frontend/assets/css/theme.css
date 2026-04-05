@@ -1231,6 +1231,37 @@ nav a[aria-current="page"] .site-nav__active-icon-wrap {
   text-decoration-color: rgba(255, 255, 255, 0.72);
 }
 
+.block-events__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.block-events__item:not(.is-lead) .block-events__links {
+  display: none;
+}
+
+.block-events__link-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(15, 23, 42, 0.36);
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.block-events__link-chip:hover {
+  border-color: rgba(255, 255, 255, 0.9);
+  background: rgba(15, 23, 42, 0.56);
+}
+
 .block-events__empty {
   color: var(--color-text-muted);
 }

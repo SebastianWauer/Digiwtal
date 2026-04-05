@@ -1030,6 +1030,7 @@ if ($method === 'GET' && $sub === '/events') {
             'category_colors' => $catColorsArr,
             'category_color_map' => $catColorMap,
             'image_variants' => [],
+            'category_links' => [],
         ];
     }
 
@@ -1076,6 +1077,64 @@ if ($method === 'GET' && $sub === '/events') {
             $eid = (int)($it['id'] ?? 0);
             if ($eid > 0 && isset($variantsByEvent[$eid])) {
                 $items[$idx]['image_variants'] = $variantsByEvent[$eid];
+            }
+        }
+    }
+
+    if ($eventIds !== [] && api_db_table_exists($pdo, 'event_category_links')) {
+        $hasLinksType = api_db_column_exists($pdo, 'event_category_links', 'link_type');
+        $hasLinksPdfMedia = api_db_column_exists($pdo, 'event_category_links', 'pdf_media_id');
+        $ph = implode(',', array_fill(0, count($eventIds), '?'));
+        $lsql = "
+            SELECT
+              ecl.event_id,
+              ec.slug AS category_slug,
+              ec.name AS category_name,
+              " . ($hasLinksType ? 'ecl.link_type' : "'link'") . " AS link_type,
+              ecl.label,
+              ecl.url,
+              " . ($hasLinksPdfMedia ? 'ecl.pdf_media_id' : "NULL") . " AS pdf_media_id,
+              ecl.sort_order
+            FROM event_category_links ecl
+            JOIN event_categories ec ON ec.id = ecl.category_id AND ec.is_deleted = 0
+            WHERE ecl.event_id IN ($ph)
+            ORDER BY ecl.event_id ASC, ec.sort_order ASC, ec.name ASC, ecl.sort_order ASC, ecl.id ASC
+        ";
+        $lst = $pdo->prepare($lsql);
+        foreach ($eventIds as $i => $eid) {
+            $lst->bindValue($i + 1, (int)$eid, PDO::PARAM_INT);
+        }
+        $lst->execute();
+        $lrows = $lst->fetchAll();
+        $linksByEvent = [];
+        foreach (is_array($lrows) ? $lrows : [] as $lr) {
+            if (!is_array($lr)) continue;
+            $eid = (int)($lr['event_id'] ?? 0);
+            $type = strtolower(trim((string)($lr['link_type'] ?? 'link')));
+            if (!in_array($type, ['link', 'youtube', 'pdf'], true)) {
+                $type = 'link';
+            }
+            $label = trim((string)($lr['label'] ?? ''));
+            $url = trim((string)($lr['url'] ?? ''));
+            $pdfMediaId = (int)($lr['pdf_media_id'] ?? 0);
+            if ($url === '' && $type === 'pdf' && $pdfMediaId > 0) {
+                $url = '/media/file?id=' . $pdfMediaId;
+            }
+            if ($eid <= 0 || $label === '' || $url === '') continue;
+            $linksByEvent[$eid][] = [
+                'category_slug' => strtolower(trim((string)($lr['category_slug'] ?? ''))),
+                'category_name' => trim((string)($lr['category_name'] ?? '')),
+                'link_type' => $type,
+                'label' => $label,
+                'url' => $url,
+                'pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : 0,
+                'sort_order' => (int)($lr['sort_order'] ?? 0),
+            ];
+        }
+        foreach ($items as $idx => $it) {
+            $eid = (int)($it['id'] ?? 0);
+            if ($eid > 0 && isset($linksByEvent[$eid])) {
+                $items[$idx]['category_links'] = $linksByEvent[$eid];
             }
         }
     }

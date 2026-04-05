@@ -8,6 +8,7 @@ use PDO;
 final class EventRepositoryDb
 {
     private ?bool $supportsMultiCategoryDateRange = null;
+    private ?bool $supportsCategoryLinks = null;
     private bool $schemaEnsured = false;
 
     public function __construct(private PDO $pdo) {}
@@ -99,6 +100,7 @@ final class EventRepositoryDb
             return null;
         }
         $row['category_image_media_map'] = $this->loadCategoryImageMediaMap($id);
+        $row['category_links_map'] = $this->loadCategoryLinksMap($id);
         return $row;
     }
 
@@ -106,6 +108,7 @@ final class EventRepositoryDb
         ?int $id,
         array $categoryIds,
         array $categoryImageMediaIds,
+        array $categoryLinksMap,
         string $title,
         string $subtitle,
         string $description,
@@ -171,6 +174,7 @@ final class EventRepositoryDb
             ]);
             $this->syncCategories($id, $categoryIds);
             $this->syncCategoryImages($id, $categoryIds, $categoryImageMediaIds);
+            $this->syncCategoryLinks($id, $categoryIds, $categoryLinksMap);
             return $id;
         }
 
@@ -196,6 +200,7 @@ final class EventRepositoryDb
         $newId = (int)$this->pdo->lastInsertId();
         $this->syncCategories($newId, $categoryIds);
         $this->syncCategoryImages($newId, $categoryIds, $categoryImageMediaIds);
+        $this->syncCategoryLinks($newId, $categoryIds, $categoryLinksMap);
         return $newId;
     }
 
@@ -303,9 +308,127 @@ final class EventRepositoryDb
         return $out;
     }
 
+    private function syncCategoryLinks(int $eventId, array $categoryIds, array $categoryLinksMap): void
+    {
+        if (!$this->supportsCategoryLinks()) {
+            return;
+        }
+
+        $allowedCategoryIds = array_values(array_unique(array_map(static fn($v): int => (int)$v, $categoryIds)));
+        $allowedCategoryIds = array_values(array_filter($allowedCategoryIds, static fn(int $v): bool => $v > 0));
+        $allowedLookup = array_fill_keys($allowedCategoryIds, true);
+
+        $del = $this->pdo->prepare("DELETE FROM event_category_links WHERE event_id = :id");
+        $del->execute([':id' => $eventId]);
+
+        if ($allowedCategoryIds === []) {
+            return;
+        }
+
+        $ins = $this->pdo->prepare("
+            INSERT INTO event_category_links (event_id, category_id, link_type, label, url, pdf_media_id, sort_order)
+            VALUES (:event_id, :category_id, :link_type, :label, :url, :pdf_media_id, :sort_order)
+        ");
+
+        foreach ($categoryLinksMap as $cidRaw => $linksRaw) {
+            $cid = (int)$cidRaw;
+            if ($cid <= 0 || !isset($allowedLookup[$cid]) || !is_array($linksRaw)) {
+                continue;
+            }
+            $order = 10;
+            foreach ($linksRaw as $linkRow) {
+                if (!is_array($linkRow)) {
+                    continue;
+                }
+                $label = trim((string)($linkRow['label'] ?? ''));
+                $url = trim((string)($linkRow['url'] ?? ''));
+                $type = strtolower(trim((string)($linkRow['type'] ?? 'link')));
+                if (!in_array($type, ['link', 'youtube', 'pdf'], true)) {
+                    $type = 'link';
+                }
+                $pdfMediaId = (int)($linkRow['pdf_media_id'] ?? 0);
+                if ($label === '' || $url === '') {
+                    if (!($type === 'pdf' && $pdfMediaId > 0)) {
+                        continue;
+                    }
+                }
+                if ($url === '' && $type === 'pdf' && $pdfMediaId > 0) {
+                    $url = '/media/file?id=' . $pdfMediaId;
+                }
+                if ($label === '' || $url === '') {
+                    continue;
+                }
+                $ins->execute([
+                    ':event_id' => $eventId,
+                    ':category_id' => $cid,
+                    ':link_type' => $type,
+                    ':label' => mb_substr($label, 0, 120, 'UTF-8'),
+                    ':url' => mb_substr($url, 0, 2048, 'UTF-8'),
+                    ':pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : null,
+                    ':sort_order' => $order,
+                ]);
+                $order += 10;
+            }
+        }
+    }
+
+    private function loadCategoryLinksMap(int $eventId): array
+    {
+        if (!$this->supportsCategoryLinks()) {
+            return [];
+        }
+        $st = $this->pdo->prepare("
+            SELECT category_id, link_type, label, url, pdf_media_id, sort_order
+            FROM event_category_links
+            WHERE event_id = :event_id
+            ORDER BY category_id ASC, sort_order ASC, id ASC
+        ");
+        $st->execute([':event_id' => $eventId]);
+        $rows = $st->fetchAll();
+        $out = [];
+        foreach (is_array($rows) ? $rows : [] as $r) {
+            if (!is_array($r)) continue;
+            $cid = (int)($r['category_id'] ?? 0);
+            $type = strtolower(trim((string)($r['link_type'] ?? 'link')));
+            if (!in_array($type, ['link', 'youtube', 'pdf'], true)) {
+                $type = 'link';
+            }
+            $label = trim((string)($r['label'] ?? ''));
+            $url = trim((string)($r['url'] ?? ''));
+            $pdfMediaId = (int)($r['pdf_media_id'] ?? 0);
+            if ($url === '' && $type === 'pdf' && $pdfMediaId > 0) {
+                $url = '/media/file?id=' . $pdfMediaId;
+            }
+            if ($cid <= 0 || $label === '' || $url === '') {
+                continue;
+            }
+            if (!isset($out[$cid]) || !is_array($out[$cid])) {
+                $out[$cid] = [];
+            }
+            $out[$cid][] = [
+                'type' => $type,
+                'label' => $label,
+                'url' => $url,
+                'pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : 0,
+                'sort_order' => (int)($r['sort_order'] ?? 0),
+            ];
+        }
+        return $out;
+    }
+
     private function supportsCategoryImageMap(): bool
     {
         return $this->tableExists('event_category_media');
+    }
+
+    private function supportsCategoryLinks(): bool
+    {
+        $this->ensureSchemaBestEffort();
+        if ($this->supportsCategoryLinks !== null) {
+            return $this->supportsCategoryLinks;
+        }
+        $this->supportsCategoryLinks = $this->tableExists('event_category_links');
+        return $this->supportsCategoryLinks;
     }
 
     private function supportsMultiCategoryDateRange(): bool
@@ -414,6 +537,43 @@ final class EventRepositoryDb
         } catch (\Throwable) {
             // Best effort only.
         }
+
+        try {
+            if (!$this->tableExists('event_category_links')) {
+                $this->pdo->exec("
+                    CREATE TABLE IF NOT EXISTS `event_category_links` (
+                      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                      `event_id` BIGINT UNSIGNED NOT NULL,
+                      `category_id` BIGINT UNSIGNED NOT NULL,
+                      `link_type` VARCHAR(20) NOT NULL DEFAULT 'link',
+                      `label` VARCHAR(120) NOT NULL,
+                      `url` VARCHAR(2048) NULL DEFAULT NULL,
+                      `pdf_media_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+                      `sort_order` INT NOT NULL DEFAULT 10,
+                      `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                      `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                      PRIMARY KEY (`id`),
+                      KEY `idx_event_category_links_event` (`event_id`, `category_id`, `sort_order`),
+                      KEY `idx_event_category_links_pdf_media` (`pdf_media_id`),
+                      CONSTRAINT `fk_event_category_links_event`
+                        FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
+                      CONSTRAINT `fk_event_category_links_category`
+                        FOREIGN KEY (`category_id`) REFERENCES `event_categories`(`id`) ON DELETE CASCADE,
+                      CONSTRAINT `fk_event_category_links_pdf_media`
+                        FOREIGN KEY (`pdf_media_id`) REFERENCES `media_items`(`id`) ON DELETE SET NULL
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                ");
+            } else {
+                if (!$this->columnExists('event_category_links', 'link_type')) {
+                    $this->pdo->exec("ALTER TABLE `event_category_links` ADD COLUMN `link_type` VARCHAR(20) NOT NULL DEFAULT 'link' AFTER `category_id`");
+                }
+                if (!$this->columnExists('event_category_links', 'pdf_media_id')) {
+                    $this->pdo->exec("ALTER TABLE `event_category_links` ADD COLUMN `pdf_media_id` BIGINT UNSIGNED NULL DEFAULT NULL AFTER `url`");
+                }
+            }
+        } catch (\Throwable) {
+            // Best effort only.
+        }
     }
 
     private function tableExists(string $table): bool
@@ -499,6 +659,7 @@ final class EventRepositoryDb
         $row['event_date_from'] = (string)(isset($row['event_date']) && $row['event_date'] !== '' ? date('Y-m-d', (int)strtotime((string)$row['event_date'])) : '');
         $row['event_date_to'] = (string)$row['event_date_from'];
         $row['category_image_media_map'] = [];
+        $row['category_links_map'] = [];
         return $row;
     }
 

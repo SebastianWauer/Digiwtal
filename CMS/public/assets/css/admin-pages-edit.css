@@ -1060,3 +1060,105 @@ html[data-theme="dark"] .pages-edit-block-tabs__panels{
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* Event edit enhancements */
+.events-edit-form .pages-edit-textarea {
+  min-height: 190px;
+}
+
+.events-edit-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.events-edit-select-tile {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--btn-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--card) 8%);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.events-edit-select-tile.is-active {
+  border-color: color-mix(in srgb, var(--outline) 62%, var(--btn-border));
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.08);
+}
+
+.events-edit-select-tile__meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.events-edit-modal-cat {
+  width: min(980px, calc(100% - 28px));
+}
+
+.events-edit-category-card__section {
+  display: grid;
+  gap: 10px;
+}
+
+.events-edit-links-list {
+  display: grid;
+  gap: 8px;
+}
+
+.events-edit-link-row {
+  display: grid;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--btn-border) 70%, transparent);
+  border-radius: 10px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+
+.events-edit-link-row__head {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.events-edit-link-row__body {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 8px;
+}
+
+.events-edit-link-row__body input[data-link-pdf-id] {
+  opacity: .7;
+}
+
+.events-edit-link-row__body.is-pdf input[data-link-pdf-id] {
+  opacity: 1;
+}
+
+.events-edit-links-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .events-edit-selector-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .events-edit-link-row__head,
+  .events-edit-link-row__body {
+    grid-template-columns: 1fr;
+  }
+
+  .events-edit-modal-cat {
+    width: calc(100% - 10px);
+    max-height: calc(100dvh - 10px);
+  }
+
+  .events-edit-link-add,
+  .events-edit-link-remove {
+    width: 100%;
+  }
+}

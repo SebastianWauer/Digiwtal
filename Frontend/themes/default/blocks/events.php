@@ -102,6 +102,7 @@ foreach ($items as $item) {
         'category_slugs' => $categorySlugs,
         'category_colors' => $categoryColors,
         'category_color_map' => $categoryColorMap,
+        'category_links' => is_array($item['category_links'] ?? null) ? $item['category_links'] : [],
     ];
 }
 
@@ -233,6 +234,26 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
             $categorySlugs = $item['category_slugs'];
             $categoryColors = is_array($item['category_colors'] ?? null) ? $item['category_colors'] : [];
             $categoryColorMap = is_array($item['category_color_map'] ?? null) ? $item['category_color_map'] : [];
+            $categoryLinks = is_array($item['category_links'] ?? null) ? $item['category_links'] : [];
+            $normalizedLinks = [];
+            foreach ($categoryLinks as $lnk) {
+                if (!is_array($lnk)) continue;
+                $lbl = trim((string)($lnk['label'] ?? ''));
+                $url = trim((string)($lnk['url'] ?? ''));
+                if ($lbl === '' || $url === '') continue;
+                if (preg_match('#^(https?://|mailto:|tel:|/)#i', $url) !== 1) continue;
+                $type = strtolower(trim((string)($lnk['link_type'] ?? 'link')));
+                if (!in_array($type, ['link', 'youtube', 'pdf'], true)) {
+                    $type = 'link';
+                }
+                $normalizedLinks[] = [
+                    'category_slug' => strtolower(trim((string)($lnk['category_slug'] ?? ''))),
+                    'category_name' => trim((string)($lnk['category_name'] ?? '')),
+                    'link_type' => $type,
+                    'label' => $lbl,
+                    'url' => $url,
+                ];
+            }
             $categoryNameMap = [];
             foreach ($categorySlugs as $ci => $cSlugRaw) {
                 $cSlug = strtolower(trim((string)$cSlugRaw));
@@ -266,9 +287,10 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
             $variantsJson = htmlspecialchars((string)json_encode($variants, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
             $categoryColorMapJson = htmlspecialchars((string)json_encode($categoryColorMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
             $categoryNameMapJson = htmlspecialchars((string)json_encode($categoryNameMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
+            $categoryLinksJson = htmlspecialchars((string)json_encode($normalizedLinks, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
             $baseCat = htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8');
           ?>
-          <article class="block-events__item<?= $isPast ? ' is-past' : '' ?>" data-year="<?= htmlspecialchars($year, ENT_QUOTES, 'UTF-8') ?>" data-categories="<?= htmlspecialchars($catCsv, ENT_QUOTES, 'UTF-8') ?>" data-past="<?= $isPast ? '1' : '0' ?>" data-image-variants="<?= $variantsJson ?>" data-category-color-map="<?= $categoryColorMapJson ?>" data-category-name-map="<?= $categoryNameMapJson ?>" data-date-from="<?= htmlspecialchars($dateFrom, ENT_QUOTES, 'UTF-8') ?>" data-date-to="<?= htmlspecialchars($dateTo, ENT_QUOTES, 'UTF-8') ?>" data-title="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>">
+          <article class="block-events__item<?= $isPast ? ' is-past' : '' ?>" data-year="<?= htmlspecialchars($year, ENT_QUOTES, 'UTF-8') ?>" data-categories="<?= htmlspecialchars($catCsv, ENT_QUOTES, 'UTF-8') ?>" data-past="<?= $isPast ? '1' : '0' ?>" data-image-variants="<?= $variantsJson ?>" data-category-color-map="<?= $categoryColorMapJson ?>" data-category-name-map="<?= $categoryNameMapJson ?>" data-category-links="<?= $categoryLinksJson ?>" data-date-from="<?= htmlspecialchars($dateFrom, ENT_QUOTES, 'UTF-8') ?>" data-date-to="<?= htmlspecialchars($dateTo, ENT_QUOTES, 'UTF-8') ?>" data-title="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>">
             <?php if ($fromParts !== null): ?>
               <div class="block-events__corner">
                 <div class="block-events__date-badge" aria-label="<?= htmlspecialchars($dateLabel, ENT_QUOTES, 'UTF-8') ?>">
@@ -314,6 +336,7 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
               <?php if ($youtubeUrl !== ''): ?>
                 <a class="block-events__video" href="<?= htmlspecialchars($youtubeUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Video ansehen</a>
               <?php endif; ?>
+              <div class="block-events__links" data-event-links></div>
             </div>
           </article>
         <?php endforeach; ?>
@@ -400,9 +423,57 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
           }
         };
 
+        const linksOf = (card) => {
+          const raw = String(card.getAttribute('data-category-links') || '').trim();
+          if (!raw) return [];
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        };
+
+        const renderLinks = (card, slug) => {
+          const wrap = card.querySelector('[data-event-links]');
+          if (!wrap) return;
+          const allLinks = linksOf(card);
+          if (!allLinks.length) {
+            wrap.innerHTML = '';
+            wrap.hidden = true;
+            return;
+          }
+
+          const wanted = String(slug || '').trim().toLowerCase();
+          let visibleLinks = allLinks;
+          if (wanted !== '') {
+            const matching = allLinks.filter((item) => String(item.category_slug || '').toLowerCase() === wanted);
+            if (matching.length > 0) {
+              visibleLinks = matching;
+            }
+          }
+
+          const escapeHtml = (s) => String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+          wrap.innerHTML = visibleLinks.map((item) => {
+            const label = String(item.label || '').trim();
+            const url = String(item.url || '').trim();
+            if (!label || !url) return '';
+            if (!/^(https?:\/\/|mailto:|tel:|\/)/i.test(url)) return '';
+            return '<a class=\"block-events__link-chip\" href=\"' + escapeHtml(url) + '\" target=\"_blank\" rel=\"noopener\">' + escapeHtml(label) + '</a>';
+          }).join('');
+          wrap.hidden = wrap.innerHTML.trim() === '';
+        };
+
         const setVariant = (card, slug) => {
           const img = card.querySelector('[data-event-img]');
           if (!img) return;
+          const wanted = String(slug || '').trim().toLowerCase();
           const smoothSwapImage = (nextUrl, fx, fy) => {
             const currentUrl = String(img.getAttribute('src') || '').trim();
             const next = String(nextUrl || '').trim();
@@ -460,9 +531,9 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
             const baseFx = Number(img.dataset.focusX ?? img.getAttribute('data-focus-x') ?? 50);
             const baseFy = Number(img.dataset.focusY ?? img.getAttribute('data-focus-y') ?? 50);
             applyCoverFocus(img, baseFx, baseFy);
+            renderLinks(card, wanted);
             return;
           }
-          const wanted = String(slug || '').trim().toLowerCase();
           let chosen = null;
           if (wanted !== '') {
             chosen = variants.find((v) => String(v.category_slug || '').toLowerCase() === wanted) || null;
@@ -483,6 +554,7 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
               if (base) cat.textContent = base;
             }
           }
+          renderLinks(card, wanted);
         };
 
         const renderFocusDebug = (img, rawX, rawY, normX, normY, finalPos) => {

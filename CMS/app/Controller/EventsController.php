@@ -212,6 +212,7 @@ final class EventsController
                 'is_published' => 1,
                 'is_deleted' => 0,
                 'category_ids_csv' => '',
+                'category_links_map' => [],
             ];
         }
         if (!empty($row['is_deleted'])) {
@@ -275,6 +276,95 @@ final class EventsController
                 $categoryImageMediaIds[$cid] = $mid > 0 ? $mid : 0;
             }
         }
+        $postedCategoryLinks = $_POST['category_links'] ?? [];
+        if (!is_array($postedCategoryLinks)) {
+            $postedCategoryLinks = [];
+        }
+        $categoryLinksMap = [];
+        foreach ($postedCategoryLinks as $cidRaw => $groupRaw) {
+            $cid = (int)$cidRaw;
+            if ($cid <= 0 || !is_array($groupRaw)) {
+                continue;
+            }
+            $labels = $groupRaw['label'] ?? [];
+            $urls = $groupRaw['url'] ?? [];
+            $types = $groupRaw['type'] ?? [];
+            $pdfMediaIds = $groupRaw['pdf_media_id'] ?? [];
+            if (!is_array($labels) || !is_array($urls) || !is_array($types) || !is_array($pdfMediaIds)) {
+                continue;
+            }
+            $max = max(count($labels), count($urls), count($types), count($pdfMediaIds));
+            if ($max <= 0) {
+                continue;
+            }
+            for ($i = 0; $i < $max; $i++) {
+                $type = strtolower(trim((string)($types[$i] ?? 'link')));
+                if (!in_array($type, ['link', 'youtube', 'pdf'], true)) {
+                    $type = 'link';
+                }
+                $label = trim((string)($labels[$i] ?? ''));
+                $url = trim((string)($urls[$i] ?? ''));
+                $pdfMediaId = (int)($pdfMediaIds[$i] ?? 0);
+                if ($label === '' && $url === '') {
+                    if ($pdfMediaId <= 0) {
+                        continue;
+                    }
+                }
+
+                if ($label === '') {
+                    $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Bitte eine Beschriftung pro Eintrag angeben.'];
+                    header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                    exit;
+                }
+
+                if ($type === 'youtube') {
+                    if ($url === '' || preg_match('#^(https?://(www\.)?(youtube\.com|youtu\.be)/)#i', $url) !== 1) {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'YouTube-Einträge benötigen eine gültige YouTube-URL.'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                } elseif ($type === 'pdf') {
+                    if ($pdfMediaId <= 0 && $url === '') {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'PDF-Einträge benötigen entweder eine PDF-Media-ID oder eine PDF-URL.'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                    if ($url !== '' && preg_match('#^(https?://|/)#i', $url) !== 1) {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'PDF-URL ist ungültig. Erlaubt: https://, http:// oder /pfad'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                } else {
+                    if ($url === '') {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Weiterleitungs-Einträge benötigen eine URL.'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                    if (preg_match('#^(https?://|mailto:|tel:|/)#i', $url) !== 1) {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ungültige Link-URL. Erlaubt: https://, http://, mailto:, tel: oder /pfad'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                }
+
+                if ($url === '' && $pdfMediaId > 0 && $type === 'pdf') {
+                    $url = '/media/file?id=' . $pdfMediaId;
+                }
+
+                if ($url === '' && $type !== 'pdf') {
+                    continue;
+                }
+                if (!isset($categoryLinksMap[$cid]) || !is_array($categoryLinksMap[$cid])) {
+                    $categoryLinksMap[$cid] = [];
+                }
+                $categoryLinksMap[$cid][] = [
+                    'type' => $type,
+                    'label' => mb_substr($label, 0, 120, 'UTF-8'),
+                    'url' => mb_substr($url, 0, 2048, 'UTF-8'),
+                    'pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : 0,
+                ];
+            }
+        }
         $newCategory = trim((string)($_POST['category_new'] ?? ''));
         $eventDateFromRaw = trim((string)($_POST['event_date_from'] ?? ''));
         $eventDateToRaw = trim((string)($_POST['event_date_to'] ?? ''));
@@ -327,6 +417,7 @@ final class EventsController
             $id > 0 ? $id : null,
             $categoryIds,
             $categoryImageMediaIds,
+            $categoryLinksMap,
             $title,
             $subtitle,
             $description,
