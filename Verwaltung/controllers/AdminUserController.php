@@ -173,6 +173,56 @@ class AdminUserController
         exit;
     }
 
+    public function resetPassword(int $userId): void
+    {
+        AdminAuth::requireAuth();
+        $this->requireSuperadmin();
+
+        if (!Csrf::verify($_POST['csrf_token'] ?? '')) {
+            $_SESSION['flash_errors'] = ['Ungültige Anfrage.'];
+            header('Location: /admin/admin-users/' . $userId);
+            exit;
+        }
+
+        $user = $this->userRepo->findById($userId);
+        if ($user === null) {
+            http_response_code(404);
+            echo '<!DOCTYPE html><html><head><title>404</title></head><body><h1>404 Not Found</h1></body></html>';
+            exit;
+        }
+
+        $password = (string)($_POST['password'] ?? '');
+        $passwordConfirm = (string)($_POST['password_confirm'] ?? '');
+        $errors = [];
+
+        if (strlen($password) < 12) {
+            $errors[] = 'Passwort muss mindestens 12 Zeichen haben.';
+        }
+        if ($password !== $passwordConfirm) {
+            $errors[] = 'Passwörter stimmen nicht überein.';
+        }
+
+        if (!empty($errors)) {
+            $_SESSION['flash_errors'] = $errors;
+            header('Location: /admin/admin-users/' . $userId);
+            exit;
+        }
+
+        $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+        if (!is_string($hash) || $hash === '') {
+            $_SESSION['flash_errors'] = ['Passwort konnte nicht sicher gespeichert werden.'];
+            header('Location: /admin/admin-users/' . $userId);
+            exit;
+        }
+
+        $this->userRepo->updatePasswordHash($userId, $hash);
+        $this->audit->log('admin_user.password_reset', 'admin_user', $userId, 'email: ' . (string)($user['email'] ?? ''));
+
+        $_SESSION['flash_success'] = 'Passwort wurde erfolgreich zurückgesetzt.';
+        header('Location: /admin/admin-users/' . $userId);
+        exit;
+    }
+
     public function qr(int $userId): void
     {
         AdminAuth::requireAuth();

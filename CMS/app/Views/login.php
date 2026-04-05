@@ -13,7 +13,7 @@
 <main class="container">
   <header class="header">
     <h1 class="title">Admin Login</h1>
-    <p class="subtitle">Bitte Benutzername und Passwort eingeben.</p>
+    <p class="subtitle">Bitte Benutzername oder E-Mail und Passwort eingeben.</p>
   </header>
 
   <?php if (is_array($flash)): ?>
@@ -34,7 +34,7 @@
 
           <div class="controls">
             <label class="chk">
-              <span>Benutzer</span>
+              <span>Benutzername oder E-Mail</span>
               <input type="text" name="username" required autocomplete="username">
             </label>
 

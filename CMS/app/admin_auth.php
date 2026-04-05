@@ -435,7 +435,13 @@ function admin_login(string $username, string $password): bool
 
     usleep(50_000);
 
-    $stmt = $pdo->prepare("SELECT id, password_hash, enabled FROM users WHERE username = :u LIMIT 1");
+    $stmt = $pdo->prepare("
+        SELECT id, password_hash, enabled
+        FROM users
+        WHERE username = :u OR email = :u
+        ORDER BY CASE WHEN username = :u THEN 0 ELSE 1 END, id ASC
+        LIMIT 1
+    ");
     $stmt->execute([':u' => $username]);
     $row = $stmt->fetch();
     if (!is_array($row)) {

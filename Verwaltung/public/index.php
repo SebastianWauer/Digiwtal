@@ -215,6 +215,7 @@ $router->add('GET',  '/admin/admin-users/{id}', [$adminUserController, 'show']);
 $router->add('POST', '/admin/admin-users', [$adminUserController, 'store']);
 $router->add('POST', '/admin/admin-users/{id}/totp/start', [$adminUserController, 'startTotpSetup']);
 $router->add('POST', '/admin/admin-users/{id}/totp/verify', [$adminUserController, 'verifyTotpSetup']);
+$router->add('POST', '/admin/admin-users/{id}/password', [$adminUserController, 'resetPassword']);
 $router->add('GET',  '/admin/admin-users/{id}/totp/qr', [$adminUserController, 'qr']);
 $router->add('POST', '/admin/admin-users/{id}/delete', [$adminUserController, 'delete']);
 $router->add('GET',  '/admin/customers/{id}/webhooks', [$webhookManageController, 'show']);

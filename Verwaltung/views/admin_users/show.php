@@ -54,6 +54,31 @@ ob_start();
     <section class="surface">
         <header class="page-header page-header--section">
             <div class="page-header__main">
+                <h2 class="section-title">Passwort zurücksetzen</h2>
+                <p class="page-subtitle">Neues Passwort setzen und direkt für den Login aktivieren.</p>
+            </div>
+        </header>
+
+        <form method="POST" action="/admin/admin-users/<?php echo (int)($user['id'] ?? 0); ?>/password" class="form-stack">
+            <?php echo Csrf::field(); ?>
+            <div class="field">
+                <label for="password">Neues Passwort</label>
+                <div class="field__hint">Mindestens 12 Zeichen.</div>
+                <input class="input" id="password" name="password" type="password" minlength="12" required>
+            </div>
+            <div class="field">
+                <label for="password_confirm">Neues Passwort bestätigen</label>
+                <input class="input" id="password_confirm" name="password_confirm" type="password" minlength="12" required>
+            </div>
+            <div class="submit-row">
+                <button class="btn btn--primary" type="submit">Passwort speichern</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="surface">
+        <header class="page-header page-header--section">
+            <div class="page-header__main">
                 <h2 class="section-title">TOTP-Setup</h2>
                 <p class="page-subtitle">2FA für neue Admins vorbereiten und verifizieren.</p>
             </div>

@@ -71,4 +71,12 @@ class AdminUserRepository
         );
         $stmt->execute([$secret, $id]);
     }
+
+    public function updatePasswordHash(int $id, string $passwordHash): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE admin_users SET password_hash = ? WHERE id = ?'
+        );
+        $stmt->execute([$passwordHash, $id]);
+    }
 }
