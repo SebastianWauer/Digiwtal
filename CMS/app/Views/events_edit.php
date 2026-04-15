@@ -196,7 +196,7 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
 
         <div class="events-edit-category-card__section">
           <div class="pages-edit-field-label">Einträge</div>
-          <div class="pages-edit-field-hint">Typ wählen und dann Felder ausfüllen. Für PDF: URL oder Media-ID nutzen.</div>
+          <div class="pages-edit-field-hint">Typ wählen und dann Felder ausfüllen. Für PDF: URL oder Media-ID nutzen. Für YouTube optional Start/Ende setzen (steuert die Einbettung in „Nächstes Event“).</div>
 
           <div class="events-edit-links-list" data-links-list="<?= $cid ?>">
             <?php if ($savedLinks !== []): ?>
@@ -212,6 +212,14 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
                   $entryLabel = trim((string)($entry['label'] ?? ''));
                   $entryUrl = trim((string)($entry['url'] ?? ''));
                   $entryPdf = (int)($entry['pdf_media_id'] ?? 0);
+                  $entryYoutubeStart = trim((string)($entry['youtube_start_at'] ?? ''));
+                  $entryYoutubeEnd = trim((string)($entry['youtube_end_at'] ?? ''));
+                  if ($entryYoutubeStart !== '' && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $entryYoutubeStart) === 1) {
+                    $entryYoutubeStart = str_replace(' ', 'T', substr($entryYoutubeStart, 0, 16));
+                  }
+                  if ($entryYoutubeEnd !== '' && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $entryYoutubeEnd) === 1) {
+                    $entryYoutubeEnd = str_replace(' ', 'T', substr($entryYoutubeEnd, 0, 16));
+                  }
                 ?>
                 <div class="events-edit-link-row" data-link-row>
                   <div class="events-edit-link-row__head">
@@ -226,6 +234,8 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
                   <div class="events-edit-link-row__body">
                     <input class="pages-edit-input" type="text" name="category_links[<?= $cid ?>][url][]" value="<?= h($entryUrl) ?>" placeholder="https://..." data-link-url>
                     <input class="pages-edit-input" type="number" min="0" step="1" name="category_links[<?= $cid ?>][pdf_media_id][]" value="<?= $entryPdf > 0 ? (int)$entryPdf : '' ?>" placeholder="PDF Media-ID" data-link-pdf-id>
+                    <input class="pages-edit-input" type="datetime-local" name="category_links[<?= $cid ?>][youtube_start_at][]" value="<?= h($entryYoutubeStart) ?>" placeholder="YouTube Start" data-link-youtube-start>
+                    <input class="pages-edit-input" type="datetime-local" name="category_links[<?= $cid ?>][youtube_end_at][]" value="<?= h($entryYoutubeEnd) ?>" placeholder="YouTube Ende" data-link-youtube-end>
                   </div>
                 </div>
               <?php endforeach; ?>
@@ -301,22 +311,39 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
     const typeEl = row.querySelector('[data-link-type]');
     const urlEl = row.querySelector('[data-link-url]');
     const pdfEl = row.querySelector('[data-link-pdf-id]');
-    if (!typeEl || !urlEl || !pdfEl) return;
+    const yStartEl = row.querySelector('[data-link-youtube-start]');
+    const yEndEl = row.querySelector('[data-link-youtube-end]');
+    if (!typeEl || !urlEl || !pdfEl || !yStartEl || !yEndEl) return;
     const type = String(typeEl.value || '').trim().toLowerCase();
     const body = pdfEl.closest('.events-edit-link-row__body');
 
     if (type === 'youtube') {
       urlEl.placeholder = 'https://www.youtube.com/watch?v=...';
-      pdfEl.disabled = true;
-      if (body) body.classList.remove('is-pdf');
+      pdfEl.readOnly = true;
+      yStartEl.readOnly = false;
+      yEndEl.readOnly = false;
+      if (body) {
+        body.classList.remove('is-pdf');
+        body.classList.add('is-youtube');
+      }
     } else if (type === 'pdf') {
       urlEl.placeholder = 'https://... oder /media/file?id=...';
-      pdfEl.disabled = false;
-      if (body) body.classList.add('is-pdf');
+      pdfEl.readOnly = false;
+      yStartEl.readOnly = true;
+      yEndEl.readOnly = true;
+      if (body) {
+        body.classList.add('is-pdf');
+        body.classList.remove('is-youtube');
+      }
     } else {
       urlEl.placeholder = 'https://...';
-      pdfEl.disabled = true;
-      if (body) body.classList.remove('is-pdf');
+      pdfEl.readOnly = true;
+      yStartEl.readOnly = true;
+      yEndEl.readOnly = true;
+      if (body) {
+        body.classList.remove('is-pdf');
+        body.classList.remove('is-youtube');
+      }
     }
   };
 
@@ -337,6 +364,8 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
       '<div class="events-edit-link-row__body">',
         '<input class="pages-edit-input" type="text" name="category_links[' + categoryId + '][url][]" placeholder="https://..." data-link-url>',
         '<input class="pages-edit-input" type="number" min="0" step="1" name="category_links[' + categoryId + '][pdf_media_id][]" placeholder="PDF Media-ID" data-link-pdf-id>',
+        '<input class="pages-edit-input" type="datetime-local" name="category_links[' + categoryId + '][youtube_start_at][]" placeholder="YouTube Start" data-link-youtube-start>',
+        '<input class="pages-edit-input" type="datetime-local" name="category_links[' + categoryId + '][youtube_end_at][]" placeholder="YouTube Ende" data-link-youtube-end>',
       '</div>'
     ].join('');
     applyRowTypeUi(row);

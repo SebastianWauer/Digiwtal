@@ -861,6 +861,7 @@ if ($method === 'GET' && $sub === '/events') {
     }
     $includePast = !empty($_GET['include_past']);
     $hasCategoryColor = api_db_column_exists($pdo, 'event_categories', 'color_hex');
+    $hasCategoryLogo = api_db_column_exists($pdo, 'event_categories', 'logo_media_id');
     $hasEventSubtitle = api_db_column_exists($pdo, 'events', 'subtitle');
     $supportsMulti = api_db_table_exists($pdo, 'event_category_map')
         && api_db_column_exists($pdo, 'events', 'event_date_from')
@@ -1029,9 +1030,70 @@ if ($method === 'GET' && $sub === '/events') {
             'category_slugs' => $catSlugsArr,
             'category_colors' => $catColorsArr,
             'category_color_map' => $catColorMap,
+            'category_logo_map' => [],
             'image_variants' => [],
             'category_links' => [],
         ];
+    }
+
+    if ($items !== [] && $hasCategoryLogo) {
+        $allCategorySlugs = [];
+        foreach ($items as $it) {
+            if (!is_array($it)) continue;
+            $slugs = is_array($it['category_slugs'] ?? null) ? $it['category_slugs'] : [];
+            foreach ($slugs as $slugVal) {
+                $slugKey = strtolower(trim((string)$slugVal));
+                if ($slugKey !== '') {
+                    $allCategorySlugs[$slugKey] = true;
+                }
+            }
+        }
+        $allCategorySlugs = array_keys($allCategorySlugs);
+        if ($allCategorySlugs !== []) {
+            $slugParts = [];
+            $slugParams = [];
+            foreach ($allCategorySlugs as $idx => $slugVal) {
+                $ph = ':logo_slug_' . $idx;
+                $slugParts[] = $ph;
+                $slugParams[$ph] = $slugVal;
+            }
+            $logosSql = "
+                SELECT slug, logo_media_id
+                FROM event_categories
+                WHERE is_deleted = 0
+                  AND logo_media_id IS NOT NULL
+                  AND logo_media_id > 0
+                  AND slug IN (" . implode(',', $slugParts) . ")
+            ";
+            $logosStmt = $pdo->prepare($logosSql);
+            foreach ($slugParams as $ph => $slugVal) {
+                $logosStmt->bindValue($ph, $slugVal);
+            }
+            $logosStmt->execute();
+            $logoRows = $logosStmt->fetchAll();
+            $logoMapBySlug = [];
+            foreach (is_array($logoRows) ? $logoRows : [] as $row) {
+                if (!is_array($row)) continue;
+                $slugKey = strtolower(trim((string)($row['slug'] ?? '')));
+                $logoMediaId = (int)($row['logo_media_id'] ?? 0);
+                if ($slugKey === '' || $logoMediaId <= 0) continue;
+                $logoMapBySlug[$slugKey] = '/media/file?id=' . $logoMediaId;
+            }
+            if ($logoMapBySlug !== []) {
+                foreach ($items as $idx => $it) {
+                    if (!is_array($it)) continue;
+                    $slugs = is_array($it['category_slugs'] ?? null) ? $it['category_slugs'] : [];
+                    $itemLogoMap = [];
+                    foreach ($slugs as $slugVal) {
+                        $slugKey = strtolower(trim((string)$slugVal));
+                        if ($slugKey !== '' && isset($logoMapBySlug[$slugKey])) {
+                            $itemLogoMap[$slugKey] = $logoMapBySlug[$slugKey];
+                        }
+                    }
+                    $items[$idx]['category_logo_map'] = $itemLogoMap;
+                }
+            }
+        }
     }
 
     if ($eventIds !== [] && api_db_table_exists($pdo, 'event_category_media')) {
@@ -1084,6 +1146,8 @@ if ($method === 'GET' && $sub === '/events') {
     if ($eventIds !== [] && api_db_table_exists($pdo, 'event_category_links')) {
         $hasLinksType = api_db_column_exists($pdo, 'event_category_links', 'link_type');
         $hasLinksPdfMedia = api_db_column_exists($pdo, 'event_category_links', 'pdf_media_id');
+        $hasLinksYoutubeStartAt = api_db_column_exists($pdo, 'event_category_links', 'youtube_start_at');
+        $hasLinksYoutubeEndAt = api_db_column_exists($pdo, 'event_category_links', 'youtube_end_at');
         $ph = implode(',', array_fill(0, count($eventIds), '?'));
         $lsql = "
             SELECT
@@ -1094,6 +1158,8 @@ if ($method === 'GET' && $sub === '/events') {
               ecl.label,
               ecl.url,
               " . ($hasLinksPdfMedia ? 'ecl.pdf_media_id' : "NULL") . " AS pdf_media_id,
+              " . ($hasLinksYoutubeStartAt ? 'ecl.youtube_start_at' : "NULL") . " AS youtube_start_at,
+              " . ($hasLinksYoutubeEndAt ? 'ecl.youtube_end_at' : "NULL") . " AS youtube_end_at,
               ecl.sort_order
             FROM event_category_links ecl
             JOIN event_categories ec ON ec.id = ecl.category_id AND ec.is_deleted = 0
@@ -1128,6 +1194,8 @@ if ($method === 'GET' && $sub === '/events') {
                 'label' => $label,
                 'url' => $url,
                 'pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : 0,
+                'youtube_start_at' => trim((string)($lr['youtube_start_at'] ?? '')),
+                'youtube_end_at' => trim((string)($lr['youtube_end_at'] ?? '')),
                 'sort_order' => (int)($lr['sort_order'] ?? 0),
             ];
         }

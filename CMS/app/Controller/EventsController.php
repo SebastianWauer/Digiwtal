@@ -36,16 +36,28 @@ final class EventsController
         [$user, $theme, $_pdo, $events, $categories] = $this->deps($user);
 
         $categoryId = (int)($_GET['category_id'] ?? 0);
+        $currentYear = (int)date('Y');
+        $year = (int)($_GET['year'] ?? $currentYear);
+        if ($year < 1970 || $year > 2100) {
+            $year = $currentYear;
+        }
         $flash = $_SESSION['flash'] ?? null;
         unset($_SESSION['flash']);
         try {
             $this->mediaUsageService()->rebuildAllEventUsages();
-            $rows = $events->listActive($categoryId > 0 ? $categoryId : null);
+            $this->mediaUsageService()->rebuildAllEventCategoryUsages();
+            $rows = $events->listActive($categoryId > 0 ? $categoryId : null, $year);
             $allCategories = $categories->listActive();
+            $availableYears = $events->listAvailableYears();
+            if (!in_array($currentYear, $availableYears, true)) {
+                $availableYears[] = $currentYear;
+            }
+            rsort($availableYears, SORT_NUMERIC);
             $deletedCount = $events->countDeleted();
         } catch (\Throwable $e) {
             $rows = [];
             $allCategories = [];
+            $availableYears = [$currentYear];
             $deletedCount = 0;
             $flash = ['type' => 'error', 'msg' => 'Events konnten nicht geladen werden: ' . $e->getMessage()];
         }
@@ -141,6 +153,14 @@ final class EventsController
         $id = (int)($_POST['id'] ?? 0);
         $name = trim((string)($_POST['name'] ?? ''));
         $colorHexRaw = trim((string)($_POST['color_hex'] ?? ''));
+        $logoMediaIdRaw = trim((string)($_POST['logo_media_id'] ?? ($_POST['logo_media_id_row_' . $id] ?? '')));
+        $logoMediaId = null;
+        if ($logoMediaIdRaw !== '' && ctype_digit($logoMediaIdRaw)) {
+            $parsedLogoMediaId = (int)$logoMediaIdRaw;
+            if ($parsedLogoMediaId > 0) {
+                $logoMediaId = $parsedLogoMediaId;
+            }
+        }
         $colorHex = null;
         if ($colorHexRaw !== '' && preg_match('/^#[0-9a-fA-F]{6}$/', $colorHexRaw) === 1) {
             $colorHex = strtoupper($colorHexRaw);
@@ -159,8 +179,9 @@ final class EventsController
                 header('Location: /events/categories');
                 exit;
             }
-            $categories->update($id, $name, $colorHex);
+            $categories->update($id, $name, $colorHex, $logoMediaId);
             $saved = $categories->findById($id);
+            $this->mediaUsageService()->syncEventCategoryUsage($id, (int)($saved['logo_media_id'] ?? 0));
             if ($colorHex !== null) {
                 $savedColor = strtoupper(trim((string)($saved['color_hex'] ?? '')));
                 if ($savedColor !== $colorHex) {
@@ -280,6 +301,25 @@ final class EventsController
         if (!is_array($postedCategoryLinks)) {
             $postedCategoryLinks = [];
         }
+        $parseDateTimeLocal = static function (string $value): ?string {
+            $raw = trim($value);
+            if ($raw === '') {
+                return null;
+            }
+            if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $raw) === 1) {
+                $dt = \DateTime::createFromFormat('Y-m-d\TH:i', $raw);
+                if ($dt instanceof \DateTime) {
+                    return $dt->format('Y-m-d H:i:00');
+                }
+            }
+            if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/', $raw) === 1) {
+                $dt = \DateTime::createFromFormat(str_contains($raw, ':') && substr_count($raw, ':') === 2 ? 'Y-m-d H:i:s' : 'Y-m-d H:i', $raw);
+                if ($dt instanceof \DateTime) {
+                    return $dt->format('Y-m-d H:i:00');
+                }
+            }
+            return null;
+        };
         $categoryLinksMap = [];
         foreach ($postedCategoryLinks as $cidRaw => $groupRaw) {
             $cid = (int)$cidRaw;
@@ -290,10 +330,12 @@ final class EventsController
             $urls = $groupRaw['url'] ?? [];
             $types = $groupRaw['type'] ?? [];
             $pdfMediaIds = $groupRaw['pdf_media_id'] ?? [];
-            if (!is_array($labels) || !is_array($urls) || !is_array($types) || !is_array($pdfMediaIds)) {
+            $youtubeStartAts = $groupRaw['youtube_start_at'] ?? [];
+            $youtubeEndAts = $groupRaw['youtube_end_at'] ?? [];
+            if (!is_array($labels) || !is_array($urls) || !is_array($types) || !is_array($pdfMediaIds) || !is_array($youtubeStartAts) || !is_array($youtubeEndAts)) {
                 continue;
             }
-            $max = max(count($labels), count($urls), count($types), count($pdfMediaIds));
+            $max = max(count($labels), count($urls), count($types), count($pdfMediaIds), count($youtubeStartAts), count($youtubeEndAts));
             if ($max <= 0) {
                 continue;
             }
@@ -305,6 +347,10 @@ final class EventsController
                 $label = trim((string)($labels[$i] ?? ''));
                 $url = trim((string)($urls[$i] ?? ''));
                 $pdfMediaId = (int)($pdfMediaIds[$i] ?? 0);
+                $youtubeStartAtRaw = trim((string)($youtubeStartAts[$i] ?? ''));
+                $youtubeEndAtRaw = trim((string)($youtubeEndAts[$i] ?? ''));
+                $youtubeStartAt = $youtubeStartAtRaw !== '' ? $parseDateTimeLocal($youtubeStartAtRaw) : null;
+                $youtubeEndAt = $youtubeEndAtRaw !== '' ? $parseDateTimeLocal($youtubeEndAtRaw) : null;
                 if ($label === '' && $url === '') {
                     if ($pdfMediaId <= 0) {
                         continue;
@@ -320,6 +366,21 @@ final class EventsController
                 if ($type === 'youtube') {
                     if ($url === '' || preg_match('#^(https?://(www\.)?(youtube\.com|youtu\.be)/)#i', $url) !== 1) {
                         $_SESSION['flash'] = ['type' => 'error', 'msg' => 'YouTube-Einträge benötigen eine gültige YouTube-URL.'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                    if ($youtubeStartAtRaw !== '' && $youtubeStartAt === null) {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'YouTube-Startzeit ist ungültig.'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                    if ($youtubeEndAtRaw !== '' && $youtubeEndAt === null) {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'YouTube-Endzeit ist ungültig.'];
+                        header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
+                        exit;
+                    }
+                    if ($youtubeStartAt !== null && $youtubeEndAt !== null && $youtubeEndAt <= $youtubeStartAt) {
+                        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'YouTube-Endzeit muss nach der Startzeit liegen.'];
                         header('Location: /events/edit' . ($id > 0 ? ('?id=' . $id) : ''));
                         exit;
                     }
@@ -362,6 +423,8 @@ final class EventsController
                     'label' => mb_substr($label, 0, 120, 'UTF-8'),
                     'url' => mb_substr($url, 0, 2048, 'UTF-8'),
                     'pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : 0,
+                    'youtube_start_at' => $type === 'youtube' && $youtubeStartAt !== null ? $youtubeStartAt : '',
+                    'youtube_end_at' => $type === 'youtube' && $youtubeEndAt !== null ? $youtubeEndAt : '',
                 ];
             }
         }

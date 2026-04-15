@@ -8,6 +8,8 @@ $canEdit = function_exists('admin_can') && admin_can('events.edit');
 $canDelete = function_exists('admin_can') && admin_can('events.delete');
 $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
 $selectedCategoryId = (int)($_GET['category_id'] ?? 0);
+$selectedYear = (int)($_GET['year'] ?? date('Y'));
+$yearOptions = is_array($availableYears ?? null) ? $availableYears : [];
 ?>
 <div class="pages-actions">
   <?php if ($canCreate): ?>
@@ -24,6 +26,12 @@ $selectedCategoryId = (int)($_GET['category_id'] ?? 0);
           <option value="<?= $cid ?>" <?= $selectedCategoryId === $cid ? 'selected' : '' ?>>
             <?= h((string)($cat['name'] ?? 'Kategorie')) ?>
           </option>
+        <?php endforeach; ?>
+      </select>
+      <select class="pages-edit-input" name="year" style="min-width:140px;">
+        <?php foreach ($yearOptions as $yearOption): ?>
+          <?php $yo = (int)$yearOption; if ($yo <= 0) continue; ?>
+          <option value="<?= $yo ?>" <?= $selectedYear === $yo ? 'selected' : '' ?>><?= $yo ?></option>
         <?php endforeach; ?>
       </select>
       <button type="submit" class="btn btn--ghost">Filtern</button>
@@ -62,6 +70,12 @@ $selectedCategoryId = (int)($_GET['category_id'] ?? 0);
         }
         $isPublished = !empty($r['is_published']);
         $badgeClass = $isPublished ? 'pages-badge--live' : 'pages-badge--draft';
+        $today = (string)date('Y-m-d');
+        $effectiveEnd = $dateTo !== '' ? $dateTo : $dateFrom;
+        if ($effectiveEnd === '' && trim((string)($r['event_date'] ?? '')) !== '') {
+          $effectiveEnd = (string)date('Y-m-d', (int)strtotime((string)$r['event_date']));
+        }
+        $isExpired = $effectiveEnd !== '' && $effectiveEnd < $today;
         $dateLabel = '<span class="pages-hint">ohne Datum</span>';
         if ($dateFrom !== '' && $dateTo !== '') {
           $dateLabel = h((string)date('d.m.Y', (int)strtotime($dateFrom))) . ' - ' . h((string)date('d.m.Y', (int)strtotime($dateTo)));
@@ -75,7 +89,12 @@ $selectedCategoryId = (int)($_GET['category_id'] ?? 0);
         <td><strong><?= h($title) ?></strong></td>
         <td><?= $dateLabel ?></td>
         <td><?= $cat !== '' ? h($cat) : '<span class="pages-hint">ohne Kategorie</span>' ?></td>
-        <td><span class="pages-badge <?= $badgeClass ?>"><?= $isPublished ? 'Live' : 'Entwurf' ?></span></td>
+        <td>
+          <span class="pages-badge <?= $badgeClass ?>"><?= $isPublished ? 'Live' : 'Entwurf' ?></span>
+          <?php if ($isExpired): ?>
+            <span class="pages-badge pages-badge--expired">Abgelaufen</span>
+          <?php endif; ?>
+        </td>
         <td class="pages-col-actions">
           <div class="pages-actions-inline">
             <?php if ($canEdit): ?><a class="btn btn--ghost btn--badge btn--warn" href="/events/edit?id=<?= $id ?>">Bearbeiten</a><?php endif; ?>

@@ -487,6 +487,9 @@ final class PagesController
             $hasCategoryColor = function_exists('admin_db_column_exists')
                 ? admin_db_column_exists($pdo, 'event_categories', 'color_hex')
                 : false;
+            $hasCategoryLogo = function_exists('admin_db_column_exists')
+                ? admin_db_column_exists($pdo, 'event_categories', 'logo_media_id')
+                : false;
             $hasEventSubtitle = function_exists('admin_db_column_exists')
                 ? admin_db_column_exists($pdo, 'events', 'subtitle')
                 : false;
@@ -592,9 +595,70 @@ final class PagesController
                         'category_slugs' => $catSlugsArr,
                         'category_colors' => $catColorsArr,
                         'category_color_map' => $catColorMap,
+                        'category_logo_map' => [],
                         'image_variants' => [],
                         'category_links' => [],
                     ];
+                }
+
+                if ($items !== [] && $hasCategoryLogo) {
+                    $allCategorySlugs = [];
+                    foreach ($items as $itLogo) {
+                        if (!is_array($itLogo)) continue;
+                        $slugs = is_array($itLogo['category_slugs'] ?? null) ? $itLogo['category_slugs'] : [];
+                        foreach ($slugs as $slugVal) {
+                            $slugKey = strtolower(trim((string)$slugVal));
+                            if ($slugKey !== '') {
+                                $allCategorySlugs[$slugKey] = true;
+                            }
+                        }
+                    }
+                    $allCategorySlugs = array_keys($allCategorySlugs);
+                    if ($allCategorySlugs !== []) {
+                        $logoIn = [];
+                        $logoParams = [];
+                        foreach ($allCategorySlugs as $lidx => $slugVal) {
+                            $phLogo = ':logo_slug_' . $lidx;
+                            $logoIn[] = $phLogo;
+                            $logoParams[$phLogo] = $slugVal;
+                        }
+                        $logoSql = "
+                            SELECT slug, logo_media_id
+                            FROM event_categories
+                            WHERE is_deleted = 0
+                              AND logo_media_id IS NOT NULL
+                              AND logo_media_id > 0
+                              AND slug IN (" . implode(',', $logoIn) . ")
+                        ";
+                        $logoStmt = $pdo->prepare($logoSql);
+                        foreach ($logoParams as $phLogo => $slugVal) {
+                            $logoStmt->bindValue($phLogo, $slugVal);
+                        }
+                        $logoStmt->execute();
+                        $logoRows = $logoStmt->fetchAll(\PDO::FETCH_ASSOC);
+                        $logoMapBySlug = [];
+                        foreach (is_array($logoRows) ? $logoRows : [] as $logoRow) {
+                            if (!is_array($logoRow)) continue;
+                            $slugKey = strtolower(trim((string)($logoRow['slug'] ?? '')));
+                            $logoMediaId = (int)($logoRow['logo_media_id'] ?? 0);
+                            if ($slugKey === '' || $logoMediaId <= 0) continue;
+                            $logoMapBySlug[$slugKey] = '/media/file?id=' . $logoMediaId;
+                        }
+                        if ($logoMapBySlug !== []) {
+                            foreach ($items as $ixLogo => $itLogo) {
+                                if (!is_array($itLogo)) continue;
+                                $slugs = is_array($itLogo['category_slugs'] ?? null) ? $itLogo['category_slugs'] : [];
+                                $itemLogoMap = [];
+                                foreach ($slugs as $slugVal) {
+                                    $slugKey = strtolower(trim((string)$slugVal));
+                                    if ($slugKey !== '' && isset($logoMapBySlug[$slugKey])) {
+                                        $itemLogoMap[$slugKey] = $logoMapBySlug[$slugKey];
+                                    }
+                                }
+                                $items[$ixLogo]['category_logo_map'] = $itemLogoMap;
+                            }
+                        }
+                    }
                 }
 
                 if ($eventIds !== []) {
@@ -653,6 +717,12 @@ final class PagesController
                         $hasLinksPdfMedia = function_exists('admin_db_column_exists')
                             ? admin_db_column_exists($pdo, 'event_category_links', 'pdf_media_id')
                             : false;
+                        $hasLinksYoutubeStartAt = function_exists('admin_db_column_exists')
+                            ? admin_db_column_exists($pdo, 'event_category_links', 'youtube_start_at')
+                            : false;
+                        $hasLinksYoutubeEndAt = function_exists('admin_db_column_exists')
+                            ? admin_db_column_exists($pdo, 'event_category_links', 'youtube_end_at')
+                            : false;
                         $ph3 = implode(',', array_fill(0, count($eventIds), '?'));
                         $lsql = "
                             SELECT
@@ -663,6 +733,8 @@ final class PagesController
                               ecl.label,
                               ecl.url,
                               " . ($hasLinksPdfMedia ? 'ecl.pdf_media_id' : "NULL") . " AS pdf_media_id,
+                              " . ($hasLinksYoutubeStartAt ? 'ecl.youtube_start_at' : "NULL") . " AS youtube_start_at,
+                              " . ($hasLinksYoutubeEndAt ? 'ecl.youtube_end_at' : "NULL") . " AS youtube_end_at,
                               ecl.sort_order
                             FROM event_category_links ecl
                             JOIN event_categories ec ON ec.id = ecl.category_id AND ec.is_deleted = 0
@@ -699,6 +771,8 @@ final class PagesController
                                 'label' => $label,
                                 'url' => $url,
                                 'pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : 0,
+                                'youtube_start_at' => trim((string)($lr['youtube_start_at'] ?? '')),
+                                'youtube_end_at' => trim((string)($lr['youtube_end_at'] ?? '')),
                                 'sort_order' => (int)($lr['sort_order'] ?? 0),
                             ];
                         }

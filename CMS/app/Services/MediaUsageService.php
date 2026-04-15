@@ -260,6 +260,88 @@ final class MediaUsageService
     }
 
     /**
+     * Synchronisiert Media-Usages für eine Event-Kategorie (Serien-Logo).
+     */
+    public function syncEventCategoryUsage(int $categoryId, ?int $logoMediaId): void
+    {
+        if ($categoryId <= 0) return;
+
+        $entityType = 'event_category';
+        $entityId = $categoryId;
+        $beforeIds = $this->listDistinctMediaIdsForEntity($entityType, $entityId);
+
+        $rows = [];
+        $logoId = (int)$logoMediaId;
+        if ($logoId > 0) {
+            $rows[] = ['media_id' => $logoId, 'field_key' => 'logo_media_id'];
+        }
+        $rows = $this->dedupeRows($rows);
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->usageRepo->deleteForEntity($entityType, $entityId);
+            $this->usageRepo->insertIgnoreBulk($entityType, $entityId, $rows);
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        $afterIds = [];
+        foreach ($rows as $r) $afterIds[] = (int)($r['media_id'] ?? 0);
+        $this->recalcUsageCounts(array_values(array_unique(array_filter(array_merge($beforeIds, $afterIds), fn($x) => (int)$x > 0))));
+    }
+
+    /**
+     * Baut alle Event-Kategorie-Usages vollständig neu auf (aktive Kategorien).
+     */
+    public function rebuildAllEventCategoryUsages(): void
+    {
+        $beforeIds = $this->listDistinctMediaIdsForEntityType('event_category');
+
+        if (!$this->tableExists('event_categories') || !$this->columnExists('event_categories', 'logo_media_id')) {
+            return;
+        }
+
+        $rowsByCategory = [];
+        $st = $this->pdo->query("SELECT id, logo_media_id FROM event_categories WHERE is_deleted = 0");
+        $rows = $st ? $st->fetchAll() : [];
+        foreach (is_array($rows) ? $rows : [] as $r) {
+            if (!is_array($r)) continue;
+            $cid = (int)($r['id'] ?? 0);
+            if ($cid <= 0) continue;
+            $rowsByCategory[$cid] = [];
+            $logoId = (int)($r['logo_media_id'] ?? 0);
+            if ($logoId > 0) {
+                $rowsByCategory[$cid][] = ['media_id' => $logoId, 'field_key' => 'logo_media_id'];
+            }
+            $rowsByCategory[$cid] = $this->dedupeRows($rowsByCategory[$cid]);
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $del = $this->pdo->prepare("DELETE FROM media_usages WHERE entity_type = :t");
+            $del->execute([':t' => 'event_category']);
+            foreach ($rowsByCategory as $cid => $usageRows) {
+                if ($usageRows === []) continue;
+                $this->usageRepo->insertIgnoreBulk('event_category', (int)$cid, $usageRows);
+            }
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        $afterIds = [];
+        foreach ($rowsByCategory as $usageRows) {
+            foreach ($usageRows as $ur) {
+                $afterIds[] = (int)($ur['media_id'] ?? 0);
+            }
+        }
+        $this->recalcUsageCounts(array_values(array_unique(array_filter(array_merge($beforeIds, $afterIds), fn($x) => (int)$x > 0))));
+    }
+
+    /**
      * Rekursiver Scan (Arrays/Strings) nach /media/file?id=123 bzw /media/thumb?id=123
      *
      * @param mixed $node
@@ -387,6 +469,16 @@ final class MediaUsageService
         if ($table === '') return false;
         $st = $this->pdo->prepare("SHOW TABLES LIKE :t");
         $st->execute([':t' => $table]);
+        return (bool)$st->fetchColumn();
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $table = trim($table);
+        $column = trim($column);
+        if ($table === '' || $column === '') return false;
+        $st = $this->pdo->prepare("SHOW COLUMNS FROM `$table` LIKE :c");
+        $st->execute([':c' => $column]);
         return (bool)$st->fetchColumn();
     }
 }

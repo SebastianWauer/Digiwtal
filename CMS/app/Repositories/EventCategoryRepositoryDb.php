@@ -8,14 +8,16 @@ use PDO;
 final class EventCategoryRepositoryDb
 {
     private ?bool $hasColorHexColumn = null;
+    private ?bool $hasLogoMediaIdColumn = null;
 
     public function __construct(private PDO $pdo) {}
 
     public function listActive(): array
     {
         $colorSelect = $this->hasColorColumn() ? 'color_hex' : 'NULL AS color_hex';
+        $logoSelect = $this->hasLogoMediaIdColumn() ? 'logo_media_id' : 'NULL AS logo_media_id';
         $stmt = $this->pdo->query("
-            SELECT id, name, slug, {$colorSelect}, sort_order
+            SELECT id, name, slug, {$colorSelect}, {$logoSelect}, sort_order
             FROM event_categories
             WHERE is_deleted = 0
             ORDER BY sort_order ASC, name ASC
@@ -27,8 +29,9 @@ final class EventCategoryRepositoryDb
     public function findBySlug(string $slug): ?array
     {
         $colorSelect = $this->hasColorColumn() ? 'color_hex' : 'NULL AS color_hex';
+        $logoSelect = $this->hasLogoMediaIdColumn() ? 'logo_media_id' : 'NULL AS logo_media_id';
         $stmt = $this->pdo->prepare("
-            SELECT id, name, slug, {$colorSelect}, sort_order
+            SELECT id, name, slug, {$colorSelect}, {$logoSelect}, sort_order
             FROM event_categories
             WHERE slug = :slug
             LIMIT 1
@@ -41,8 +44,9 @@ final class EventCategoryRepositoryDb
     public function findById(int $id): ?array
     {
         $colorSelect = $this->hasColorColumn() ? 'color_hex' : 'NULL AS color_hex';
+        $logoSelect = $this->hasLogoMediaIdColumn() ? 'logo_media_id' : 'NULL AS logo_media_id';
         $stmt = $this->pdo->prepare("
-            SELECT id, name, slug, {$colorSelect}, sort_order
+            SELECT id, name, slug, {$colorSelect}, {$logoSelect}, sort_order
             FROM event_categories
             WHERE id = :id
               AND is_deleted = 0
@@ -53,7 +57,7 @@ final class EventCategoryRepositoryDb
         return is_array($row) ? $row : null;
     }
 
-    public function update(int $id, string $name, ?string $colorHex = null): void
+    public function update(int $id, string $name, ?string $colorHex = null, ?int $logoMediaId = null): void
     {
         $baseSlug = self::slugify($name);
         $slug = $baseSlug;
@@ -63,22 +67,33 @@ final class EventCategoryRepositoryDb
             $i++;
         }
 
-        if ($this->hasColorColumn()) {
+        if ($this->hasColorColumn() || $this->hasLogoMediaIdColumn()) {
+            $setParts = ['name = :name', 'slug = :slug'];
+            if ($this->hasColorColumn()) {
+                $setParts[] = 'color_hex = :color_hex';
+            }
+            if ($this->hasLogoMediaIdColumn()) {
+                $setParts[] = 'logo_media_id = :logo_media_id';
+            }
             $stmt = $this->pdo->prepare("
                 UPDATE event_categories
-                SET name = :name,
-                    slug = :slug,
-                    color_hex = :color_hex
+                SET " . implode(', ', $setParts) . "
                 WHERE id = :id
                   AND is_deleted = 0
                 LIMIT 1
             ");
-            $stmt->execute([
+            $params = [
                 ':id' => $id,
                 ':name' => $name,
                 ':slug' => $slug,
-                ':color_hex' => $this->normalizeColorHex($colorHex),
-            ]);
+            ];
+            if ($this->hasColorColumn()) {
+                $params[':color_hex'] = $this->normalizeColorHex($colorHex);
+            }
+            if ($this->hasLogoMediaIdColumn()) {
+                $params[':logo_media_id'] = $this->normalizeLogoMediaId($logoMediaId);
+            }
+            $stmt->execute($params);
             return;
         }
 
@@ -113,19 +128,31 @@ final class EventCategoryRepositoryDb
         return (bool)$stmt->fetchColumn();
     }
 
-    public function create(string $name, string $slug, int $sortOrder = 100, ?string $colorHex = null): int
+    public function create(string $name, string $slug, int $sortOrder = 100, ?string $colorHex = null, ?int $logoMediaId = null): int
     {
-        if ($this->hasColorColumn()) {
-            $stmt = $this->pdo->prepare("
-                INSERT INTO event_categories (name, slug, color_hex, sort_order, is_deleted)
-                VALUES (:name, :slug, :color_hex, :sort_order, 0)
-            ");
-            $stmt->execute([
+        if ($this->hasColorColumn() || $this->hasLogoMediaIdColumn()) {
+            $columns = ['name', 'slug', 'sort_order', 'is_deleted'];
+            $values = [':name', ':slug', ':sort_order', '0'];
+            $params = [
                 ':name' => $name,
                 ':slug' => $slug,
-                ':color_hex' => $this->normalizeColorHex($colorHex),
                 ':sort_order' => $sortOrder,
-            ]);
+            ];
+            if ($this->hasColorColumn()) {
+                $columns[] = 'color_hex';
+                $values[] = ':color_hex';
+                $params[':color_hex'] = $this->normalizeColorHex($colorHex);
+            }
+            if ($this->hasLogoMediaIdColumn()) {
+                $columns[] = 'logo_media_id';
+                $values[] = ':logo_media_id';
+                $params[':logo_media_id'] = $this->normalizeLogoMediaId($logoMediaId);
+            }
+            $stmt = $this->pdo->prepare("
+                INSERT INTO event_categories (" . implode(', ', $columns) . ")
+                VALUES (" . implode(', ', $values) . ")
+            ");
+            $stmt->execute($params);
         } else {
             $stmt = $this->pdo->prepare("
                 INSERT INTO event_categories (name, slug, sort_order, is_deleted)
@@ -162,6 +189,28 @@ final class EventCategoryRepositoryDb
         return $this->hasColorHexColumn;
     }
 
+    private function hasLogoMediaIdColumn(): bool
+    {
+        if ($this->hasLogoMediaIdColumn !== null) {
+            return $this->hasLogoMediaIdColumn;
+        }
+        $stmt = $this->pdo->query("SHOW COLUMNS FROM `event_categories` LIKE 'logo_media_id'");
+        $row = $stmt ? $stmt->fetch() : false;
+        $exists = is_array($row);
+        if (!$exists) {
+            try {
+                $this->pdo->exec("ALTER TABLE `event_categories` ADD COLUMN `logo_media_id` BIGINT UNSIGNED NULL DEFAULT NULL AFTER `color_hex`");
+            } catch (\Throwable) {
+                // Keep graceful fallback without hard failure when schema cannot be altered.
+            }
+            $stmt2 = $this->pdo->query("SHOW COLUMNS FROM `event_categories` LIKE 'logo_media_id'");
+            $row2 = $stmt2 ? $stmt2->fetch() : false;
+            $exists = is_array($row2);
+        }
+        $this->hasLogoMediaIdColumn = $exists;
+        return $this->hasLogoMediaIdColumn;
+    }
+
     private function normalizeColorHex(?string $value): ?string
     {
         $raw = strtoupper(trim((string)$value));
@@ -172,6 +221,12 @@ final class EventCategoryRepositoryDb
             return $raw;
         }
         return null;
+    }
+
+    private function normalizeLogoMediaId(?int $value): ?int
+    {
+        $id = (int)$value;
+        return $id > 0 ? $id : null;
     }
 
     public static function slugify(string $name): string

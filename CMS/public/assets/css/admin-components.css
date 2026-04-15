@@ -43,10 +43,22 @@
   background: rgba(255, 186, 73, 0.08);
 }
 
+.pages-badge--expired{
+  color: rgba(255, 120, 120, 0.98);
+  border-color: rgba(255, 120, 120, 0.4);
+  background: rgba(255, 120, 120, 0.1);
+}
+
 html[data-theme="light"] .pages-badge--draft{
   color: #b25a00;
   border-color: rgba(178, 90, 0, 0.35);
   background: rgba(178, 90, 0, 0.08);
+}
+
+html[data-theme="light"] .pages-badge--expired{
+  color: #b22525;
+  border-color: rgba(178, 37, 37, 0.35);
+  background: rgba(178, 37, 37, 0.08);
 }
 .btn{
   border: 1px solid transparent;

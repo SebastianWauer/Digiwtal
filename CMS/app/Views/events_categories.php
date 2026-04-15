@@ -24,6 +24,7 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
       <tr>
         <th style="width:80px;">ID</th>
         <th>Name</th>
+        <th style="width:320px;">Serien-Logo</th>
         <th style="width:180px;">Farbe</th>
         <th>Slug</th>
         <th style="width:220px;">Aktion</th>
@@ -35,6 +36,7 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
         $id = (int)($r['id'] ?? 0);
         $name = (string)($r['name'] ?? '');
         $slug = (string)($r['slug'] ?? '');
+        $logoMediaId = (int)($r['logo_media_id'] ?? 0);
         $colorHex = strtoupper(trim((string)($r['color_hex'] ?? '')));
         if (preg_match('/^#[0-9A-F]{6}$/', $colorHex) !== 1) {
           $colorHex = '#D32F2F';
@@ -45,6 +47,24 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
         <td><?= $id ?></td>
         <td>
           <input form="<?= h($formId) ?>" class="pages-edit-input" type="text" name="name" value="<?= h($name) ?>" style="min-width:280px;" <?= $canEdit ? '' : 'readonly' ?>>
+        </td>
+        <td>
+          <?php $logoInputName = 'logo_media_id_row_' . $id; ?>
+          <div class="mp">
+            <div class="mp__meta">
+              <div class="mp__actions">
+                <input form="<?= h($formId) ?>" class="ss-input mp__input" type="text" name="<?= h($logoInputName) ?>" value="<?= $logoMediaId > 0 ? h((string)$logoMediaId) : '' ?>" placeholder="Media-ID" <?= $canEdit ? '' : 'readonly' ?>>
+                <?php if ($canEdit): ?>
+                  <button type="button" class="btn btn--ghost btn--sm mp__open" data-mp-input="<?= h($logoInputName) ?>" data-mp-title="<?= h('Serien-Logo für ' . $name) ?>">Aus Medien wählen</button>
+                <?php endif; ?>
+              </div>
+            </div>
+            <div class="mp__preview">
+              <?php if ($logoMediaId > 0): ?>
+                <img src="/media/thumb?id=<?= $logoMediaId ?>" alt="">
+              <?php endif; ?>
+            </div>
+          </div>
         </td>
         <td>
             <input form="<?= h($formId) ?>" type="color" name="color_hex" value="<?= h($colorHex) ?>" title="Kategoriefarbe" <?= $canEdit ? '' : 'disabled' ?>>
@@ -62,7 +82,7 @@ $csrfField = function_exists('admin_csrf_field') ? admin_csrf_field() : '';
       </tr>
     <?php endforeach; ?>
     <?php if (($rows ?? []) === []): ?>
-      <tr><td colspan="5"><span class="pages-hint">Keine Kategorien vorhanden.</span></td></tr>
+      <tr><td colspan="6"><span class="pages-hint">Keine Kategorien vorhanden.</span></td></tr>
     <?php endif; ?>
     </tbody>
   </table>

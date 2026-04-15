@@ -13,10 +13,10 @@ final class EventRepositoryDb
 
     public function __construct(private PDO $pdo) {}
 
-    public function listActive(?int $categoryId = null): array
+    public function listActive(?int $categoryId = null, ?int $year = null): array
     {
         if (!$this->supportsMultiCategoryDateRange()) {
-            return $this->listActiveLegacy($categoryId);
+            return $this->listActiveLegacy($categoryId, $year);
         }
 
         $sql = "
@@ -39,7 +39,24 @@ final class EventRepositoryDb
             )";
             $params[':cid'] = $categoryId;
         }
-        $sql .= " GROUP BY e.id ORDER BY COALESCE(e.event_date_from, DATE(e.event_date)) ASC, e.id DESC";
+        if ($year !== null && $year > 0) {
+            $yearStart = sprintf('%04d-01-01', $year);
+            $yearEnd = sprintf('%04d-12-31', $year);
+            $sql .= " AND COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) IS NOT NULL
+                AND COALESCE(e.event_date_from, DATE(e.event_date)) IS NOT NULL
+                AND COALESCE(e.event_date_from, DATE(e.event_date)) <= :year_end
+                AND COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) >= :year_start";
+            $params[':year_start'] = $yearStart;
+            $params[':year_end'] = $yearEnd;
+        }
+        $sql .= " GROUP BY e.id ORDER BY
+            CASE
+                WHEN COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) IS NOT NULL
+                 AND COALESCE(e.event_date_to, e.event_date_from, DATE(e.event_date)) < CURDATE()
+                THEN 1 ELSE 0
+            END ASC,
+            COALESCE(e.event_date_from, DATE(e.event_date)) ASC,
+            e.id DESC";
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
@@ -67,6 +84,39 @@ final class EventRepositoryDb
         ");
         $rows = $stmt ? $stmt->fetchAll() : [];
         return is_array($rows) ? $rows : [];
+    }
+
+    public function listAvailableYears(): array
+    {
+        if ($this->supportsMultiCategoryDateRange()) {
+            $stmt = $this->pdo->query("
+                SELECT DISTINCT YEAR(COALESCE(e.event_date_from, DATE(e.event_date))) AS y
+                FROM events e
+                WHERE e.is_deleted = 0
+                  AND COALESCE(e.event_date_from, DATE(e.event_date)) IS NOT NULL
+                ORDER BY y DESC
+            ");
+        } else {
+            $stmt = $this->pdo->query("
+                SELECT DISTINCT YEAR(e.event_date) AS y
+                FROM events e
+                WHERE e.is_deleted = 0
+                  AND e.event_date IS NOT NULL
+                ORDER BY y DESC
+            ");
+        }
+        $rows = $stmt ? $stmt->fetchAll() : [];
+        if (!is_array($rows)) {
+            return [];
+        }
+        $years = [];
+        foreach ($rows as $r) {
+            $y = (int)($r['y'] ?? 0);
+            if ($y > 0) {
+                $years[] = $y;
+            }
+        }
+        return array_values(array_unique($years));
     }
 
     public function countDeleted(): int
@@ -326,8 +376,8 @@ final class EventRepositoryDb
         }
 
         $ins = $this->pdo->prepare("
-            INSERT INTO event_category_links (event_id, category_id, link_type, label, url, pdf_media_id, sort_order)
-            VALUES (:event_id, :category_id, :link_type, :label, :url, :pdf_media_id, :sort_order)
+            INSERT INTO event_category_links (event_id, category_id, link_type, label, url, pdf_media_id, youtube_start_at, youtube_end_at, sort_order)
+            VALUES (:event_id, :category_id, :link_type, :label, :url, :pdf_media_id, :youtube_start_at, :youtube_end_at, :sort_order)
         ");
 
         foreach ($categoryLinksMap as $cidRaw => $linksRaw) {
@@ -347,6 +397,8 @@ final class EventRepositoryDb
                     $type = 'link';
                 }
                 $pdfMediaId = (int)($linkRow['pdf_media_id'] ?? 0);
+                $youtubeStartAt = trim((string)($linkRow['youtube_start_at'] ?? ''));
+                $youtubeEndAt = trim((string)($linkRow['youtube_end_at'] ?? ''));
                 if ($label === '' || $url === '') {
                     if (!($type === 'pdf' && $pdfMediaId > 0)) {
                         continue;
@@ -365,6 +417,8 @@ final class EventRepositoryDb
                     ':label' => mb_substr($label, 0, 120, 'UTF-8'),
                     ':url' => mb_substr($url, 0, 2048, 'UTF-8'),
                     ':pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : null,
+                    ':youtube_start_at' => $type === 'youtube' && $youtubeStartAt !== '' ? $youtubeStartAt : null,
+                    ':youtube_end_at' => $type === 'youtube' && $youtubeEndAt !== '' ? $youtubeEndAt : null,
                     ':sort_order' => $order,
                 ]);
                 $order += 10;
@@ -378,7 +432,7 @@ final class EventRepositoryDb
             return [];
         }
         $st = $this->pdo->prepare("
-            SELECT category_id, link_type, label, url, pdf_media_id, sort_order
+            SELECT category_id, link_type, label, url, pdf_media_id, youtube_start_at, youtube_end_at, sort_order
             FROM event_category_links
             WHERE event_id = :event_id
             ORDER BY category_id ASC, sort_order ASC, id ASC
@@ -410,6 +464,8 @@ final class EventRepositoryDb
                 'label' => $label,
                 'url' => $url,
                 'pdf_media_id' => $pdfMediaId > 0 ? $pdfMediaId : 0,
+                'youtube_start_at' => trim((string)($r['youtube_start_at'] ?? '')),
+                'youtube_end_at' => trim((string)($r['youtube_end_at'] ?? '')),
                 'sort_order' => (int)($r['sort_order'] ?? 0),
             ];
         }
@@ -549,6 +605,8 @@ final class EventRepositoryDb
                       `label` VARCHAR(120) NOT NULL,
                       `url` VARCHAR(2048) NULL DEFAULT NULL,
                       `pdf_media_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+                      `youtube_start_at` DATETIME NULL DEFAULT NULL,
+                      `youtube_end_at` DATETIME NULL DEFAULT NULL,
                       `sort_order` INT NOT NULL DEFAULT 10,
                       `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                       `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -569,6 +627,12 @@ final class EventRepositoryDb
                 }
                 if (!$this->columnExists('event_category_links', 'pdf_media_id')) {
                     $this->pdo->exec("ALTER TABLE `event_category_links` ADD COLUMN `pdf_media_id` BIGINT UNSIGNED NULL DEFAULT NULL AFTER `url`");
+                }
+                if (!$this->columnExists('event_category_links', 'youtube_start_at')) {
+                    $this->pdo->exec("ALTER TABLE `event_category_links` ADD COLUMN `youtube_start_at` DATETIME NULL DEFAULT NULL AFTER `pdf_media_id`");
+                }
+                if (!$this->columnExists('event_category_links', 'youtube_end_at')) {
+                    $this->pdo->exec("ALTER TABLE `event_category_links` ADD COLUMN `youtube_end_at` DATETIME NULL DEFAULT NULL AFTER `youtube_start_at`");
                 }
             }
         } catch (\Throwable) {
@@ -598,7 +662,7 @@ final class EventRepositoryDb
         }
     }
 
-    private function listActiveLegacy(?int $categoryId = null): array
+    private function listActiveLegacy(?int $categoryId = null, ?int $year = null): array
     {
         $sql = "
             SELECT
@@ -614,7 +678,22 @@ final class EventRepositoryDb
             $sql .= " AND e.category_id = :cid";
             $params[':cid'] = $categoryId;
         }
-        $sql .= " ORDER BY e.event_date ASC, e.id DESC";
+        if ($year !== null && $year > 0) {
+            $yearStart = sprintf('%04d-01-01', $year);
+            $yearEnd = sprintf('%04d-12-31', $year);
+            $sql .= " AND e.event_date IS NOT NULL
+                AND DATE(e.event_date) >= :year_start
+                AND DATE(e.event_date) <= :year_end";
+            $params[':year_start'] = $yearStart;
+            $params[':year_end'] = $yearEnd;
+        }
+        $sql .= " ORDER BY
+            CASE
+                WHEN e.event_date IS NOT NULL AND DATE(e.event_date) < CURDATE()
+                THEN 1 ELSE 0
+            END ASC,
+            e.event_date ASC,
+            e.id DESC";
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();

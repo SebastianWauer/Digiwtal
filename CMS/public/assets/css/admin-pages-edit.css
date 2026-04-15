@@ -1124,7 +1124,7 @@ html[data-theme="dark"] .pages-edit-block-tabs__panels{
 
 .events-edit-link-row__body {
   display: grid;
-  grid-template-columns: 1fr 180px;
+  grid-template-columns: 1fr 180px 210px 210px;
   gap: 8px;
 }
 
@@ -1132,7 +1132,17 @@ html[data-theme="dark"] .pages-edit-block-tabs__panels{
   opacity: .7;
 }
 
+.events-edit-link-row__body input[data-link-youtube-start],
+.events-edit-link-row__body input[data-link-youtube-end] {
+  opacity: .7;
+}
+
 .events-edit-link-row__body.is-pdf input[data-link-pdf-id] {
+  opacity: 1;
+}
+
+.events-edit-link-row__body.is-youtube input[data-link-youtube-start],
+.events-edit-link-row__body.is-youtube input[data-link-youtube-end] {
   opacity: 1;
 }
 
