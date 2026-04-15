@@ -3,24 +3,20 @@
 $logoLight = function_exists('site_cms_logo_url') ? site_cms_logo_url('light') : null;
 $logoDark = function_exists('site_cms_logo_url') ? site_cms_logo_url('dark') : null;
 $logoUrl = $logoDark ?: $logoLight;
+$cmsVersion = function_exists('admin_version') ? admin_version() : '';
 
-if ($logoLight === null && $logoDark === null) {
+if ($logoUrl === null) {
     try {
         $stmt = db()->prepare("SELECT `value` FROM site_settings WHERE `key` = 'logo_media_id' LIMIT 1");
         $stmt->execute();
         $fallbackLogoId = (int)$stmt->fetchColumn();
         if ($fallbackLogoId > 0) {
             $logoUrl = '/media/file?id=' . $fallbackLogoId;
-            $logoLight = $logoUrl;
-            $logoDark = $logoUrl;
         }
     } catch (Throwable $e) {
         $logoUrl = null;
     }
 }
-
-$logoLight = $logoLight ?: $logoDark;
-$logoDark = $logoDark ?: $logoLight;
 ?><!doctype html>
 <html lang="de" data-theme="dark">
 <head>
@@ -39,23 +35,12 @@ $logoDark = $logoDark ?: $logoLight;
 <main class="login-auth-page">
   <section class="login-auth-card" aria-labelledby="loginTitle">
     <div class="login-auth-brand" aria-label="CMS">
-      <?php if ($logoLight || $logoDark): ?>
-        <?php if ($logoLight): ?>
-          <img src="<?= h($logoLight) ?>" alt="Logo" class="login-auth-logo login-auth-logo--light">
-        <?php endif; ?>
-        <?php if ($logoDark): ?>
-          <img src="<?= h($logoDark) ?>" alt="Logo" class="login-auth-logo login-auth-logo--dark">
-        <?php endif; ?>
+      <?php if ($logoUrl): ?>
+        <img src="<?= h($logoUrl) ?>" alt="Logo" class="login-auth-logo">
       <?php else: ?>
         <div class="login-auth-wordmark">CMS</div>
       <?php endif; ?>
     </div>
-
-    <button type="button" class="login-theme-toggle" data-theme-toggle aria-label="Theme wechseln">
-      <span class="login-theme-toggle__icon login-theme-toggle__icon--dark" aria-hidden="true">☾</span>
-      <span class="login-theme-toggle__icon login-theme-toggle__icon--light" aria-hidden="true">☼</span>
-      <span class="login-theme-toggle__thumb" aria-hidden="true"></span>
-    </button>
 
     <div class="login-auth-content">
       <h1 class="login-title" id="loginTitle">Login</h1>
@@ -106,38 +91,10 @@ $logoDark = $logoDark ?: $logoLight;
     </div>
 
     <div class="login-auth-footer">
-      &copy; <?= h(date('Y')) ?> DIGIWTAL 2.0
+      &copy; <?= h(date('Y')) ?> DIGIWTAL<?= $cmsVersion !== '' ? ' CMS ' . h($cmsVersion) : '' ?>
     </div>
   </section>
 </main>
-
-<script>
-(function () {
-  var body = document.body;
-  var root = document.documentElement;
-  var btn = document.querySelector('[data-theme-toggle]');
-
-  function applyTheme(theme) {
-    body.dataset.theme = theme;
-    root.dataset.theme = theme;
-    try {
-      localStorage.setItem('cmsLoginTheme', theme);
-    } catch (e) {}
-  }
-
-  try {
-    var stored = localStorage.getItem('cmsLoginTheme');
-    if (stored === 'light' || stored === 'dark') {
-      applyTheme(stored);
-    }
-  } catch (e) {}
-
-  if (!btn) return;
-  btn.addEventListener('click', function () {
-    applyTheme(body.dataset.theme === 'dark' ? 'light' : 'dark');
-  });
-})();
-</script>
 
 </body>
 </html>

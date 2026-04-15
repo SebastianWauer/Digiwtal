@@ -4,10 +4,6 @@ body.login-auth{
   background: var(--bg);
 }
 
-body.login-auth[data-theme="light"]{
-  background: #f6f6f7;
-}
-
 .login-auth-page{
   min-height: 100vh;
   display: flex;
@@ -45,73 +41,11 @@ body.login-auth[data-theme="light"]{
   object-fit: contain;
 }
 
-.login-auth-logo--light{
-  display: none;
-}
-
-body.login-auth[data-theme="light"] .login-auth-logo--dark{
-  display: none;
-}
-
-body.login-auth[data-theme="light"] .login-auth-logo--light{
-  display: block;
-}
-
 .login-auth-wordmark{
   color: var(--text);
   font-size: 24px;
   font-weight: 750;
   letter-spacing: 0.04em;
-}
-
-.login-theme-toggle{
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 78px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px;
-  border: 1px solid var(--btn-border);
-  border-radius: 999px;
-  background: var(--btn-bg);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.login-theme-toggle:hover{
-  background: var(--btn-hover);
-}
-
-.login-theme-toggle__icon{
-  position: relative;
-  z-index: 1;
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1;
-}
-
-.login-theme-toggle__thumb{
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  background: var(--active);
-  border: 1px solid var(--btn-border);
-  transition: left 160ms ease;
-}
-
-body.login-auth[data-theme="light"] .login-theme-toggle__thumb{
-  left: calc(100% - 29px);
 }
 
 .login-auth-content{
