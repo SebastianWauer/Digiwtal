@@ -102,6 +102,7 @@ foreach ($items as $item) {
         'category_slugs' => $categorySlugs,
         'category_colors' => $categoryColors,
         'category_color_map' => $categoryColorMap,
+        'category_logo_map' => is_array($item['category_logo_map'] ?? null) ? $item['category_logo_map'] : [],
         'category_links' => is_array($item['category_links'] ?? null) ? $item['category_links'] : [],
     ];
 }
@@ -252,6 +253,8 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
                     'link_type' => $type,
                     'label' => $lbl,
                     'url' => $url,
+                    'youtube_start_at' => trim((string)($lnk['youtube_start_at'] ?? '')),
+                    'youtube_end_at' => trim((string)($lnk['youtube_end_at'] ?? '')),
                 ];
             }
             $categoryNameMap = [];
@@ -261,6 +264,15 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
                 if ($cSlug !== '' && $cName !== '') {
                     $categoryNameMap[$cSlug] = $cName;
                 }
+            }
+            $categoryLogoMap = is_array($item['category_logo_map'] ?? null) ? $item['category_logo_map'] : [];
+            $normalizedCategoryLogoMap = [];
+            foreach ($categoryLogoMap as $slugKey => $logoUrl) {
+                $slugNorm = strtolower(trim((string)$slugKey));
+                $urlNorm = trim((string)$logoUrl);
+                if ($slugNorm === '' || $urlNorm === '') continue;
+                if (preg_match('#^(https?://|/)#i', $urlNorm) !== 1) continue;
+                $normalizedCategoryLogoMap[$slugNorm] = $urlNorm;
             }
             foreach ($categorySlugs as $ci => $cSlugRaw) {
                 $cSlug = strtolower(trim((string)$cSlugRaw));
@@ -287,10 +299,11 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
             $variantsJson = htmlspecialchars((string)json_encode($variants, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
             $categoryColorMapJson = htmlspecialchars((string)json_encode($categoryColorMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
             $categoryNameMapJson = htmlspecialchars((string)json_encode($categoryNameMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
+            $categoryLogoMapJson = htmlspecialchars((string)json_encode($normalizedCategoryLogoMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
             $categoryLinksJson = htmlspecialchars((string)json_encode($normalizedLinks, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
             $baseCat = htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8');
           ?>
-          <article class="block-events__item<?= $isPast ? ' is-past' : '' ?>" data-year="<?= htmlspecialchars($year, ENT_QUOTES, 'UTF-8') ?>" data-categories="<?= htmlspecialchars($catCsv, ENT_QUOTES, 'UTF-8') ?>" data-past="<?= $isPast ? '1' : '0' ?>" data-image-variants="<?= $variantsJson ?>" data-category-color-map="<?= $categoryColorMapJson ?>" data-category-name-map="<?= $categoryNameMapJson ?>" data-category-links="<?= $categoryLinksJson ?>" data-date-from="<?= htmlspecialchars($dateFrom, ENT_QUOTES, 'UTF-8') ?>" data-date-to="<?= htmlspecialchars($dateTo, ENT_QUOTES, 'UTF-8') ?>" data-title="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>">
+          <article class="block-events__item<?= $isPast ? ' is-past' : '' ?>" data-year="<?= htmlspecialchars($year, ENT_QUOTES, 'UTF-8') ?>" data-categories="<?= htmlspecialchars($catCsv, ENT_QUOTES, 'UTF-8') ?>" data-past="<?= $isPast ? '1' : '0' ?>" data-image-variants="<?= $variantsJson ?>" data-category-color-map="<?= $categoryColorMapJson ?>" data-category-name-map="<?= $categoryNameMapJson ?>" data-category-logo-map="<?= $categoryLogoMapJson ?>" data-category-links="<?= $categoryLinksJson ?>" data-date-from="<?= htmlspecialchars($dateFrom, ENT_QUOTES, 'UTF-8') ?>" data-date-to="<?= htmlspecialchars($dateTo, ENT_QUOTES, 'UTF-8') ?>" data-date-label="<?= htmlspecialchars($dateLabel, ENT_QUOTES, 'UTF-8') ?>" data-title="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>" data-subtitle="<?= htmlspecialchars($subtitle, ENT_QUOTES, 'UTF-8') ?>" data-description="<?= htmlspecialchars($text, ENT_QUOTES, 'UTF-8') ?>" data-youtube-url="<?= htmlspecialchars($youtubeUrl, ENT_QUOTES, 'UTF-8') ?>">
             <?php if ($fromParts !== null): ?>
               <div class="block-events__corner">
                 <div class="block-events__date-badge" aria-label="<?= htmlspecialchars($dateLabel, ENT_QUOTES, 'UTF-8') ?>">
@@ -328,21 +341,31 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
                 <h3><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h3>
               </div>
               <?php if ($text !== ''): ?><p><?= nl2br(htmlspecialchars($text, ENT_QUOTES, 'UTF-8')) ?></p><?php endif; ?>
-              <?php if ($youtubeEmbed !== ''): ?>
-                <div class="block-events__yt">
-                  <iframe src="<?= htmlspecialchars($youtubeEmbed, ENT_QUOTES, 'UTF-8') ?>" title="YouTube Video" loading="lazy" allowfullscreen></iframe>
-                </div>
-              <?php endif; ?>
-              <?php if ($youtubeUrl !== ''): ?>
-                <a class="block-events__video" href="<?= htmlspecialchars($youtubeUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Video ansehen</a>
-              <?php endif; ?>
-              <div class="block-events__links" data-event-links></div>
+              <div class="block-events__next-video" data-next-video hidden></div>
+              <button type="button" class="block-events__open" data-event-open>Details & Links</button>
             </div>
           </article>
         <?php endforeach; ?>
       </div>
       <p class="block-events__past-label" data-past-label hidden>Vergangene Events</p>
       <p class="block-events__empty block-events__empty--filtered" data-filter-empty hidden>Keine Events für die aktuelle Filterauswahl.</p>
+      </div>
+      <div class="block-events__modal" data-event-modal hidden>
+        <button type="button" class="block-events__modal-backdrop" data-event-modal-close aria-label="Schließen"></button>
+        <div class="block-events__modal-dialog" role="dialog" aria-modal="true" aria-labelledby="<?= htmlspecialchars($blockUid, ENT_QUOTES, 'UTF-8') ?>-modal-title">
+          <button type="button" class="block-events__modal-close" data-event-modal-close aria-label="Schließen">×</button>
+          <p class="block-events__modal-date" data-modal-date></p>
+          <h3 class="block-events__modal-title" id="<?= htmlspecialchars($blockUid, ENT_QUOTES, 'UTF-8') ?>-modal-title" data-modal-title></h3>
+          <p class="block-events__modal-subtitle" data-modal-subtitle hidden></p>
+          <p class="block-events__modal-text" data-modal-text hidden></p>
+          <div class="block-events__modal-visual" data-modal-visual hidden>
+            <img src="" alt="" data-modal-image>
+            <img src="" alt="" data-modal-logo hidden>
+          </div>
+          <div class="block-events__modal-cats" data-modal-cats hidden></div>
+          <div class="block-events__modal-videos" data-modal-videos hidden></div>
+          <div class="block-events__modal-links" data-modal-links></div>
+        </div>
       </div>
       <div class="block-events__calendar-view" data-view="calendar" hidden>
         <div class="block-events__calendar-toolbar">
@@ -370,6 +393,19 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
         const calTitle = root.querySelector('[data-cal-title]');
         const calMonths = root.querySelector('[data-cal-months]');
         const calEmpty = root.querySelector('[data-cal-empty]');
+        const modal = root.querySelector('[data-event-modal]');
+        const modalCloseButtons = Array.from(root.querySelectorAll('[data-event-modal-close]'));
+        const modalDate = root.querySelector('[data-modal-date]');
+        const modalTitle = root.querySelector('[data-modal-title]');
+        const modalSubtitle = root.querySelector('[data-modal-subtitle]');
+        const modalText = root.querySelector('[data-modal-text]');
+        const modalDialog = root.querySelector('.block-events__modal-dialog');
+        const modalVisual = root.querySelector('[data-modal-visual]');
+        const modalImage = root.querySelector('[data-modal-image]');
+        const modalLogo = root.querySelector('[data-modal-logo]');
+        const modalCats = root.querySelector('[data-modal-cats]');
+        const modalVideos = root.querySelector('[data-modal-videos]');
+        const modalLinks = root.querySelector('[data-modal-links]');
         const currentYear = String(new Date().getFullYear());
         let viewMode = 'cards';
         let calCursor = new Date();
@@ -434,40 +470,556 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
           }
         };
 
-        const renderLinks = (card, slug) => {
-          const wrap = card.querySelector('[data-event-links]');
-          if (!wrap) return;
-          const allLinks = linksOf(card);
-          if (!allLinks.length) {
-            wrap.innerHTML = '';
-            wrap.hidden = true;
+        const parseJsonObject = (raw) => {
+          try {
+            const parsed = JSON.parse(String(raw || '').trim());
+            return parsed && typeof parsed === 'object' ? parsed : {};
+          } catch {
+            return {};
+          }
+        };
+
+        const normalizeHref = (url) => {
+          const value = String(url || '').trim();
+          if (!value) return '';
+          return /^(https?:\/\/|mailto:|tel:|\/)/i.test(value) ? value : '';
+        };
+
+        const youtubeEmbedUrlFromUrl = (url) => {
+          const raw = String(url || '').trim();
+          if (!raw || raw.startsWith('/')) return '';
+          try {
+            const parsed = new URL(raw);
+            const host = parsed.hostname.toLowerCase();
+            let videoId = '';
+            if (host === 'youtu.be') {
+              videoId = parsed.pathname.replace(/^\/+/, '').split('/')[0] || '';
+            } else if (host.endsWith('youtube.com')) {
+              if (parsed.pathname === '/watch') {
+                videoId = String(parsed.searchParams.get('v') || '').trim();
+              } else if (parsed.pathname.startsWith('/embed/')) {
+                videoId = parsed.pathname.split('/')[2] || '';
+              } else if (parsed.pathname.startsWith('/shorts/')) {
+                videoId = parsed.pathname.split('/')[2] || '';
+              }
+            }
+            videoId = videoId.replace(/[^A-Za-z0-9_-]/g, '');
+            if (!videoId) return '';
+            return 'https://www.youtube.com/embed/' + videoId;
+          } catch {
+            return '';
+          }
+        };
+
+        const parseLinkDateTime = (raw) => {
+          const value = String(raw || '').trim();
+          if (!value) return null;
+          const normalized = value.replace(' ', 'T').replace(/:\d{2}\.\d+$/, ':00').replace(/(\d{2}):(\d{2}):(\d{2})$/, '$1:$2:$3');
+          const dt = new Date(normalized);
+          if (Number.isNaN(dt.getTime())) return null;
+          return dt;
+        };
+
+        const collectYoutubeLinks = (links, wantedSlug) => {
+          const all = Array.isArray(links) ? links : [];
+          const wanted = String(wantedSlug || '').trim().toLowerCase();
+          let filtered = all.filter((item) => String(item.link_type || '').trim().toLowerCase() === 'youtube');
+          if (wanted !== '') {
+            const byCat = filtered.filter((item) => String(item.category_slug || '').trim().toLowerCase() === wanted);
+            if (byCat.length > 0) {
+              filtered = byCat;
+            }
+          }
+          filtered = filtered.map((item) => {
+            const href = normalizeHref(item.url);
+            const embed = youtubeEmbedUrlFromUrl(href);
+            const startAt = parseLinkDateTime(item.youtube_start_at);
+            const endAt = parseLinkDateTime(item.youtube_end_at);
+            return { ...item, href, embed, startAt, endAt };
+          }).filter((item) => item.href !== '' && item.embed !== '');
+          return filtered;
+        };
+
+        const pickNextYoutubeLink = (links, wantedSlug) => {
+          const filtered = collectYoutubeLinks(links, wantedSlug);
+          if (filtered.length === 0) return null;
+
+          const scheduled = filtered.filter((item) => item.startAt !== null || item.endAt !== null);
+          const pool = scheduled.length > 0 ? scheduled : filtered;
+          const now = new Date();
+          const eligible = pool.filter((item) => item.endAt === null || item.endAt.getTime() > now.getTime());
+          if (eligible.length === 0) return null;
+
+          const active = eligible.filter((item) => (item.startAt === null || item.startAt.getTime() <= now.getTime()));
+          if (active.length > 0) {
+            active.sort((a, b) => {
+              const aEnd = a.endAt ? a.endAt.getTime() : Number.MAX_SAFE_INTEGER;
+              const bEnd = b.endAt ? b.endAt.getTime() : Number.MAX_SAFE_INTEGER;
+              if (aEnd !== bEnd) return aEnd - bEnd;
+              const aStart = a.startAt ? a.startAt.getTime() : 0;
+              const bStart = b.startAt ? b.startAt.getTime() : 0;
+              return bStart - aStart;
+            });
+            return active[0];
+          }
+
+          const upcoming = eligible.filter((item) => item.startAt !== null && item.startAt.getTime() > now.getTime());
+          if (upcoming.length > 0) {
+            upcoming.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+            return upcoming[0];
+          }
+          return null;
+        };
+
+        const formatScheduleDate = (dt) => {
+          if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) return '';
+          const date = dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+          const time = dt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+          return date + ' • ' + time;
+        };
+
+        const formatScheduleDayHeader = (dt) => {
+          if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) return 'Ohne Startdatum';
+          return dt.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        };
+
+        const formatScheduleTime = (dt) => {
+          if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) return '--:--';
+          return dt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        };
+
+        const buildLeadSchedule = (links, wantedSlug) => {
+          const all = collectYoutubeLinks(links, wantedSlug);
+          const scheduled = all.filter((item) => item.startAt !== null || item.endAt !== null);
+          if (scheduled.length === 0) {
+            return [];
+          }
+          const nowTs = Date.now();
+          const visible = scheduled.filter((item) => item.endAt === null || item.endAt.getTime() > nowTs);
+          const statusRank = (item) => {
+            const startTs = item.startAt ? item.startAt.getTime() : null;
+            const endTs = item.endAt ? item.endAt.getTime() : null;
+            const isLive = (startTs === null || startTs <= nowTs) && (endTs === null || endTs > nowTs);
+            if (isLive) return 0;
+            if (startTs !== null && startTs > nowTs) return 1;
+            return 2;
+          };
+          visible.sort((a, b) => {
+            const aRank = statusRank(a);
+            const bRank = statusRank(b);
+            if (aRank !== bRank) return aRank - bRank;
+            const aStart = a.startAt ? a.startAt.getTime() : 0;
+            const bStart = b.startAt ? b.startAt.getTime() : 0;
+            if (aStart !== bStart) return aStart - bStart;
+            const aEnd = a.endAt ? a.endAt.getTime() : Number.MAX_SAFE_INTEGER;
+            const bEnd = b.endAt ? b.endAt.getTime() : Number.MAX_SAFE_INTEGER;
+            if (aEnd !== bEnd) return aEnd - bEnd;
+            return String(a.label || '').localeCompare(String(b.label || ''), 'de');
+          });
+          let hasNextLabel = false;
+          return visible.slice(0, 5).map((item) => {
+            const startTs = item.startAt ? item.startAt.getTime() : null;
+            const endTs = item.endAt ? item.endAt.getTime() : null;
+            let status = 'upcoming';
+            let statusLabel = '';
+            if ((startTs === null || startTs <= nowTs) && (endTs === null || endTs > nowTs)) {
+              status = 'live';
+              statusLabel = 'Live';
+            } else if (startTs !== null && startTs > nowTs) {
+              status = 'upcoming';
+              if (!hasNextLabel) {
+                statusLabel = 'Als Nächstes';
+                hasNextLabel = true;
+              }
+            }
+
+            let timeLabel = '';
+            if (item.startAt && item.endAt) {
+              timeLabel = formatScheduleDate(item.startAt) + ' - ' + formatScheduleDate(item.endAt);
+            } else if (item.startAt) {
+              timeLabel = 'ab ' + formatScheduleDate(item.startAt);
+            } else if (item.endAt) {
+              timeLabel = 'bis ' + formatScheduleDate(item.endAt);
+            }
+
+            const categoryName = String(item.category_name || '').trim()
+              || (String(item.category_slug || '').trim() !== '' ? String(item.category_slug).trim() : 'Allgemein');
+
+            return {
+              label: String(item.label || '').trim() || 'YouTube Video',
+              categoryName,
+              status,
+              statusLabel,
+              timeLabel,
+              startAt: item.startAt || null,
+              endAt: item.endAt || null,
+            };
+          });
+        };
+
+        const renderLeadVideo = (card, wantedSlug) => {
+          cards.forEach((item) => {
+            const slot = item.querySelector('[data-next-video]');
+            if (!slot) return;
+            slot.hidden = true;
+            slot.innerHTML = '';
+            const badge = item.querySelector('[data-next-badge]');
+            if (badge) badge.innerHTML = 'Nächstes<br>Event';
+          });
+          if (!card) return;
+          const slot = card.querySelector('[data-next-video]');
+          if (!slot) return;
+          const links = linksOf(card);
+          const picked = pickNextYoutubeLink(links, wantedSlug);
+          if (!picked) return;
+          const nowTs = Date.now();
+          const startTs = picked.startAt ? picked.startAt.getTime() : null;
+          const endTs = picked.endAt ? picked.endAt.getTime() : null;
+          const isLive = (startTs === null || startTs <= nowTs) && (endTs === null || endTs > nowTs);
+          const badge = card.querySelector('[data-next-badge]');
+          if (badge) {
+            badge.innerHTML = isLive ? 'Live' : 'Nächstes<br>Event';
+          }
+          const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          const label = String(picked.label || '').trim() || 'Nächstes Video';
+          const scheduleEntries = buildLeadSchedule(links, wantedSlug);
+          let scheduleHtml = '';
+          if (scheduleEntries.length > 0) {
+            const dayMap = new Map();
+            const dayOrder = [];
+            scheduleEntries.forEach((entry) => {
+              const dayRef = entry.startAt instanceof Date ? entry.startAt : (entry.endAt instanceof Date ? entry.endAt : null);
+              const dayKey = dayRef instanceof Date
+                ? dayRef.getFullYear() + '-' + String(dayRef.getMonth() + 1).padStart(2, '0') + '-' + String(dayRef.getDate()).padStart(2, '0')
+                : 'ohne-datum';
+              if (!dayMap.has(dayKey)) {
+                dayMap.set(dayKey, { key: dayKey, label: formatScheduleDayHeader(dayRef), items: [] });
+                dayOrder.push(dayKey);
+              }
+              dayMap.get(dayKey).items.push(entry);
+            });
+
+            const sectionsHtml = dayOrder.map((dayKey) => {
+              const group = dayMap.get(dayKey);
+              if (!group || !Array.isArray(group.items) || group.items.length === 0) return '';
+              group.items.sort((a, b) => {
+                const aStart = a.startAt instanceof Date ? a.startAt.getTime() : Number.MAX_SAFE_INTEGER;
+                const bStart = b.startAt instanceof Date ? b.startAt.getTime() : Number.MAX_SAFE_INTEGER;
+                if (aStart !== bStart) return aStart - bStart;
+                const aEnd = a.endAt instanceof Date ? a.endAt.getTime() : Number.MAX_SAFE_INTEGER;
+                const bEnd = b.endAt instanceof Date ? b.endAt.getTime() : Number.MAX_SAFE_INTEGER;
+                return aEnd - bEnd;
+              });
+              const itemsHtml = group.items.map((entry) => {
+                const statusCls = String(entry.status || '').trim().toLowerCase();
+                const statusPart = entry.statusLabel ? ('<span class="block-events__next-schedule-status">' + esc(entry.statusLabel) + '</span>') : '';
+                const timeMain = formatScheduleTime(entry.startAt);
+                const timeMeta = (entry.endAt instanceof Date) ? ('bis ' + formatScheduleTime(entry.endAt)) : '';
+                const catRaw = String(entry.categoryName || '').trim();
+                const titleRaw = String(entry.label || '').trim();
+                const catLongCls = catRaw.length > 22 ? ' is-compact' : '';
+                const catTightCls = catRaw.length > 34 ? ' is-tight' : '';
+                const titleLongCls = titleRaw.length > 34 ? ' is-compact' : '';
+                const titleTightCls = titleRaw.length > 52 ? ' is-tight' : '';
+                return '<li class="block-events__next-schedule-item is-' + esc(statusCls) + '">'
+                  + '<div class="block-events__next-schedule-timecol">'
+                  + '<div class="block-events__next-schedule-time-main">' + esc(timeMain) + '</div>'
+                  + (timeMeta !== '' ? ('<div class="block-events__next-schedule-time-meta">' + esc(timeMeta) + '</div>') : '')
+                  + '</div>'
+                  + '<div class="block-events__next-schedule-main">'
+                  + '<div class="block-events__next-schedule-meta">'
+                  + '<div class="block-events__next-schedule-cat' + catLongCls + catTightCls + '">' + esc(entry.categoryName) + '</div>'
+                  + '<strong class="block-events__next-schedule-title' + titleLongCls + titleTightCls + '">' + esc(entry.label) + '</strong>'
+                  + '</div>'
+                  + statusPart
+                  + '</div>'
+                  + '</li>';
+              }).join('');
+              return '<section class="block-events__next-schedule-day">'
+                + '<div class="block-events__next-schedule-day-head">' + esc(group.label) + '</div>'
+                + '<ul>' + itemsHtml + '</ul>'
+                + '</section>';
+            }).join('');
+
+            scheduleHtml = '<aside class="block-events__next-schedule">'
+              + '<div class="block-events__next-schedule-head">Zeitplan</div>'
+              + sectionsHtml
+              + '</aside>';
+          }
+
+          slot.innerHTML = '<div class="block-events__next-video-head">' + esc(label) + '</div>'
+            + '<div class="block-events__next-video-layout">'
+            + '<div class="block-events__next-video-media"><iframe src="' + esc(picked.embed) + '" title="' + esc(label) + '" loading="lazy" allowfullscreen></iframe></div>'
+            + scheduleHtml
+            + '</div>';
+          slot.hidden = false;
+        };
+
+        const typeLabel = (type) => {
+          const t = String(type || '').trim().toLowerCase();
+          if (t === 'pdf') return 'PDF';
+          if (t === 'youtube') return 'Video';
+          return 'Link';
+        };
+
+        const modalState = { card: null, links: [], categories: [], logos: {} };
+        let modalPrevOverflow = '';
+
+        const renderModalCategories = (activeSlug) => {
+          if (!modalCats) return;
+          const categories = Array.isArray(modalState.categories) ? modalState.categories : [];
+          if (categories.length <= 1) {
+            modalCats.hidden = true;
+            modalCats.innerHTML = '';
+            return;
+          }
+          modalCats.hidden = false;
+          modalCats.innerHTML = categories.map((cat) => {
+            const slug = String(cat.slug || '').trim().toLowerCase();
+            const name = String(cat.name || '').trim() || 'Kategorie';
+            const color = String(cat.color || '').trim().toUpperCase();
+            const logoUrl = String(((modalState.logos || {})[slug] || '')).trim();
+            const isActive = slug === String(activeSlug || '').trim().toLowerCase();
+            const style = /^#[0-9A-F]{6}$/.test(color) ? (' style="--chip-color:' + color + ';"') : '';
+            const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const logoHtml = logoUrl !== '' ? ('<img src="' + esc(logoUrl) + '" alt="" loading="lazy">') : '';
+            return '<button type="button" class="block-events__modal-cat' + (isActive ? ' is-active' : '') + '" data-modal-cat="' + slug.replace(/"/g, '') + '"' + style + '>' + logoHtml + '<span>' + esc(name) + '</span></button>';
+          }).join('');
+        };
+
+        const renderModalVisual = (activeSlug) => {
+          if (!modalDialog) return;
+          const card = modalState.card;
+          if (!card) {
+            modalDialog.classList.remove('has-event-bg');
+            modalDialog.style.removeProperty('--event-bg-image');
+            if (modalVisual) modalVisual.hidden = true;
+            return;
+          }
+          const wanted = String(activeSlug || '').trim().toLowerCase();
+          const variants = variantsOf(card);
+          let selectedVariant = null;
+          if (wanted !== '') {
+            selectedVariant = variants.find((v) => String(v.category_slug || '').trim().toLowerCase() === wanted) || null;
+          }
+          if (!selectedVariant && variants.length > 0) {
+            selectedVariant = variants[0];
+          }
+          const fallbackImageEl = card.querySelector('[data-event-img]');
+          const fallbackImageUrl = fallbackImageEl ? String(fallbackImageEl.getAttribute('src') || '').trim() : '';
+          const imageUrl = selectedVariant && selectedVariant.image_url ? String(selectedVariant.image_url).trim() : fallbackImageUrl;
+          let focusXRaw = null;
+          let focusYRaw = null;
+          if (selectedVariant) {
+            focusXRaw = selectedVariant.image_focus_x ?? null;
+            focusYRaw = selectedVariant.image_focus_y ?? null;
+          } else if (fallbackImageEl) {
+            focusXRaw = fallbackImageEl.getAttribute('data-focus-x');
+            focusYRaw = fallbackImageEl.getAttribute('data-focus-y');
+          }
+          const [focusX, focusY] = focusPairToPercent(focusXRaw, focusYRaw, 50, 50);
+          if (imageUrl === '') {
+            modalDialog.classList.remove('has-event-bg');
+            modalDialog.style.removeProperty('--event-bg-image');
+            modalDialog.style.removeProperty('--event-bg-pos');
+          } else {
+            const escaped = imageUrl.replace(/"/g, '\\"');
+            modalDialog.classList.add('has-event-bg');
+            modalDialog.style.setProperty('--event-bg-image', 'url("' + escaped + '")');
+            modalDialog.style.setProperty('--event-bg-pos', focusX.toFixed(2) + '% ' + focusY.toFixed(2) + '%');
+          }
+          if (modalVisual) modalVisual.hidden = true;
+          if (modalLogo) {
+            const logoMap = modalState.logos || {};
+            const logoUrl = String((wanted !== '' ? logoMap[wanted] : '') || '').trim();
+            if (logoUrl !== '') {
+              modalLogo.hidden = false;
+              modalLogo.setAttribute('src', logoUrl);
+            } else {
+              modalLogo.hidden = true;
+              modalLogo.setAttribute('src', '');
+            }
+          }
+        };
+
+        const renderModalLinks = (activeSlug) => {
+          if (!modalLinks) return;
+          const links = Array.isArray(modalState.links) ? modalState.links : [];
+          const wanted = String(activeSlug || '').trim().toLowerCase();
+          const filtered = (wanted === '' ? links : links.filter((item) => String(item.category_slug || '').trim().toLowerCase() === wanted))
+            .filter((item) => String(item.link_type || '').trim().toLowerCase() !== 'youtube');
+          if (filtered.length === 0) {
+            modalLinks.innerHTML = '<p class="block-events__modal-empty">Keine Links für diese Kategorie.</p>';
+            return;
+          }
+          modalLinks.innerHTML = filtered.map((item) => {
+            const href = normalizeHref(item.url);
+            if (!href) return '';
+            const label = String(item.label || '').trim() || 'Öffnen';
+            const catName = String(item.category_name || '').trim();
+            const type = typeLabel(item.link_type);
+            const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            return '<a class="block-events__modal-link" href="' + esc(href) + '" target="_blank" rel="noopener">'
+              + '<span class="block-events__modal-link-title">' + esc(label) + '</span>'
+              + '<span class="block-events__modal-link-meta">'
+              + (catName !== '' ? ('<span class="block-events__modal-link-cat">' + esc(catName) + '</span>') : '')
+              + '<span class="block-events__modal-link-type">' + esc(type) + '</span>'
+              + '</span>'
+              + '</a>';
+          }).join('');
+          if (modalLinks.innerHTML.trim() === '') {
+            modalLinks.innerHTML = '<p class="block-events__modal-empty">Keine gültigen Links für diese Kategorie.</p>';
+          }
+        };
+
+        const renderModalVideos = (activeSlug, fallbackYoutubeUrl = '') => {
+          if (!modalVideos) return;
+          const links = Array.isArray(modalState.links) ? modalState.links : [];
+          const wanted = String(activeSlug || '').trim().toLowerCase();
+          const filtered = wanted === '' ? links : links.filter((item) => String(item.category_slug || '').trim().toLowerCase() === wanted);
+          const videos = filtered
+            .filter((item) => String(item.link_type || '').trim().toLowerCase() === 'youtube')
+            .map((item) => {
+              const href = normalizeHref(item.url);
+              const embed = youtubeEmbedUrlFromUrl(href);
+              return { ...item, href, embed };
+            })
+            .filter((item) => item.href !== '' && item.embed !== '');
+
+          const fallbackHref = normalizeHref(fallbackYoutubeUrl);
+          const fallbackEmbed = youtubeEmbedUrlFromUrl(fallbackHref);
+          if (videos.length === 0 && fallbackEmbed !== '') {
+            videos.push({
+              label: 'Event Video',
+              category_name: '',
+              href: fallbackHref,
+              embed: fallbackEmbed,
+            });
+          }
+
+          if (videos.length === 0) {
+            modalVideos.hidden = true;
+            modalVideos.innerHTML = '';
             return;
           }
 
-          const wanted = String(slug || '').trim().toLowerCase();
-          let visibleLinks = allLinks;
-          if (wanted !== '') {
-            const matching = allLinks.filter((item) => String(item.category_slug || '').toLowerCase() === wanted);
-            if (matching.length > 0) {
-              visibleLinks = matching;
-            }
+          const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          modalVideos.hidden = false;
+          if (videos.length === 1) {
+            const v = videos[0];
+            modalVideos.innerHTML = '<div class="block-events__modal-video-card">'
+              + '<div class="block-events__modal-video-head">'
+              + '<strong>' + esc(v.label || 'Video') + '</strong>'
+              + (String(v.category_name || '').trim() !== '' ? ('<span>' + esc(v.category_name) + '</span>') : '')
+              + '</div>'
+              + '<iframe src="' + esc(v.embed) + '" title="' + esc(v.label || 'YouTube Video') + '" loading="lazy" allowfullscreen></iframe>'
+              + '<a class="block-events__modal-video-link" href="' + esc(v.href) + '" target="_blank" rel="noopener">Auf YouTube öffnen</a>'
+              + '</div>';
+            return;
           }
 
-          const escapeHtml = (s) => String(s || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-
-          wrap.innerHTML = visibleLinks.map((item) => {
-            const label = String(item.label || '').trim();
-            const url = String(item.url || '').trim();
-            if (!label || !url) return '';
-            if (!/^(https?:\/\/|mailto:|tel:|\/)/i.test(url)) return '';
-            return '<a class=\"block-events__link-chip\" href=\"' + escapeHtml(url) + '\" target=\"_blank\" rel=\"noopener\">' + escapeHtml(label) + '</a>';
+          modalVideos.innerHTML = '<p class="block-events__modal-video-hint">Videos</p>' + videos.map((v, idx) => {
+            const openAttr = idx === 0 ? ' open' : '';
+            return '<details class="block-events__modal-video-acc"' + openAttr + '>'
+              + '<summary>'
+              + esc(v.label || 'Video')
+              + (String(v.category_name || '').trim() !== '' ? ('<span>' + esc(v.category_name) + '</span>') : '')
+              + '</summary>'
+              + '<div class="block-events__modal-video-embed">'
+              + '<iframe src="' + esc(v.embed) + '" title="' + esc(v.label || 'YouTube Video') + '" loading="lazy" allowfullscreen></iframe>'
+              + '<a class="block-events__modal-video-link" href="' + esc(v.href) + '" target="_blank" rel="noopener">Auf YouTube öffnen</a>'
+              + '</div>'
+              + '</details>';
           }).join('');
-          wrap.hidden = wrap.innerHTML.trim() === '';
+        };
+
+        const closeEventModal = () => {
+          if (!modal || modal.hidden) return;
+          modal.hidden = true;
+          document.body.style.overflow = modalPrevOverflow;
+        };
+
+        const openEventModal = (card) => {
+          if (!modal || !card) return;
+          const title = String(card.getAttribute('data-title') || 'Event').trim() || 'Event';
+          const subtitle = String(card.getAttribute('data-subtitle') || '').trim();
+          const description = String(card.getAttribute('data-description') || '').trim();
+          const dateLabel = String(card.getAttribute('data-date-label') || '').trim();
+          const youtubeUrl = normalizeHref(card.getAttribute('data-youtube-url') || '');
+          const allLinks = linksOf(card).filter((item) => normalizeHref(item.url) !== '' && String(item.label || '').trim() !== '');
+          const slugs = String(card.getAttribute('data-categories') || '')
+            .split(',')
+            .map((v) => v.trim().toLowerCase())
+            .filter(Boolean);
+          const colorMap = parseJsonObject(card.getAttribute('data-category-color-map'));
+          const nameMap = parseJsonObject(card.getAttribute('data-category-name-map'));
+          const logoMapRaw = parseJsonObject(card.getAttribute('data-category-logo-map'));
+          const logoMap = {};
+          Object.keys(logoMapRaw || {}).forEach((k) => {
+            const slugKey = String(k || '').trim().toLowerCase();
+            const urlVal = normalizeHref(String(logoMapRaw[k] || '').trim());
+            if (slugKey !== '' && urlVal !== '') {
+              logoMap[slugKey] = urlVal;
+            }
+          });
+          const categoryMap = new Map();
+          slugs.forEach((slug) => {
+            const cleanSlug = String(slug || '').trim().toLowerCase();
+            if (!cleanSlug) return;
+            const rawColor = String(colorMap[cleanSlug] || '').trim().toUpperCase();
+            categoryMap.set(cleanSlug, {
+              slug: cleanSlug,
+              name: String(nameMap[cleanSlug] || cleanSlug).trim() || cleanSlug,
+              color: /^#[0-9A-F]{6}$/.test(rawColor) ? rawColor : '',
+            });
+          });
+          allLinks.forEach((item) => {
+            const cleanSlug = String(item.category_slug || '').trim().toLowerCase();
+            if (!cleanSlug) return;
+            const existing = categoryMap.get(cleanSlug) || null;
+            const itemName = String(item.category_name || '').trim();
+            if (!existing) {
+              categoryMap.set(cleanSlug, { slug: cleanSlug, name: itemName || cleanSlug, color: '' });
+              return;
+            }
+            if (!existing.name && itemName) {
+              existing.name = itemName;
+            }
+          });
+
+          const categories = Array.from(categoryMap.values());
+          const preferredSlug = String((catSelect && catSelect.value) ? catSelect.value : '').trim().toLowerCase();
+          const activeSlug = categories.some((c) => c.slug === preferredSlug)
+            ? preferredSlug
+            : (categories[0] ? categories[0].slug : '');
+
+          modalState.card = card;
+          modalState.links = allLinks;
+          modalState.categories = categories;
+          modalState.logos = logoMap;
+
+          if (modalTitle) modalTitle.textContent = title;
+          if (modalDate) {
+            modalDate.textContent = dateLabel !== '' ? dateLabel : 'Datum wird noch ergänzt';
+          }
+          if (modalSubtitle) {
+            modalSubtitle.hidden = subtitle === '';
+            modalSubtitle.textContent = subtitle;
+          }
+          if (modalText) {
+            modalText.hidden = description === '';
+            modalText.textContent = description;
+          }
+          renderModalCategories(activeSlug);
+          renderModalVisual(activeSlug);
+          renderModalVideos(activeSlug, youtubeUrl);
+          renderModalLinks(activeSlug);
+
+          modalPrevOverflow = document.body.style.overflow || '';
+          document.body.style.overflow = 'hidden';
+          modal.hidden = false;
+          const closeBtn = modal.querySelector('.block-events__modal-close');
+          if (closeBtn) closeBtn.focus();
         };
 
         const setVariant = (card, slug) => {
@@ -531,7 +1083,6 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
             const baseFx = Number(img.dataset.focusX ?? img.getAttribute('data-focus-x') ?? 50);
             const baseFy = Number(img.dataset.focusY ?? img.getAttribute('data-focus-y') ?? 50);
             applyCoverFocus(img, baseFx, baseFy);
-            renderLinks(card, wanted);
             return;
           }
           let chosen = null;
@@ -554,7 +1105,6 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
               if (base) cat.textContent = base;
             }
           }
-          renderLinks(card, wanted);
         };
 
         const renderFocusDebug = (img, rawX, rawY, normX, normY, finalPos) => {
@@ -932,7 +1482,10 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
               lead.style.order = '0';
               const badge = lead.querySelector('[data-next-badge]');
               if (badge) badge.hidden = false;
+              renderLeadVideo(lead, c);
             }
+          } else {
+            renderLeadVideo(null, c);
           }
 
           if (empty) empty.hidden = visible > 0;
@@ -962,6 +1515,45 @@ uasort($categoryCounts, static fn(array $a, array $b): int => strcmp($a['name'],
           yearSelect.addEventListener('change', apply);
         }
         if (catSelect) catSelect.addEventListener('change', apply);
+        cards.forEach((card) => {
+          const openBtn = card.querySelector('[data-event-open]');
+          if (openBtn) {
+            openBtn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              openEventModal(card);
+            });
+          }
+          card.addEventListener('click', (ev) => {
+            const target = ev.target instanceof Element ? ev.target : null;
+            if (!target) return;
+            if (target.closest('a, button, input, select, textarea, label')) return;
+            openEventModal(card);
+          });
+        });
+        if (modalCats) {
+          modalCats.addEventListener('click', (ev) => {
+            const target = ev.target instanceof Element ? ev.target.closest('[data-modal-cat]') : null;
+            if (!target) return;
+            const slug = String(target.getAttribute('data-modal-cat') || '').trim().toLowerCase();
+            renderModalCategories(slug);
+            renderModalVisual(slug);
+            const fallbackYoutube = modalState.card ? String(modalState.card.getAttribute('data-youtube-url') || '') : '';
+            renderModalVideos(slug, fallbackYoutube);
+            renderModalLinks(slug);
+          });
+        }
+        modalCloseButtons.forEach((btn) => {
+          btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            closeEventModal();
+          });
+        });
+        document.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Escape' && modal && !modal.hidden) {
+            closeEventModal();
+          }
+        });
         viewBtns.forEach((btn) => {
           btn.addEventListener('click', () => setViewMode(String(btn.getAttribute('data-view-btn') || 'cards')));
         });

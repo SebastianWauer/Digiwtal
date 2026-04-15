@@ -825,6 +825,18 @@ function enrichEventBlocksWithItems(array $blocks, CmsApiClient $client, string 
                         $variants[$vi]['image_url'] = absolutizeCmsMediaUrl($vimg, $cmsBaseUrl);
                     }
                     $items[$i]['image_variants'] = $variants;
+                    $links = is_array($item['category_links'] ?? null) ? $item['category_links'] : [];
+                    foreach ($links as $li => $link) {
+                        if (!is_array($link)) continue;
+                        $lurl = (string)($link['url'] ?? '');
+                        $links[$li]['url'] = absolutizeCmsMediaUrl($lurl, $cmsBaseUrl);
+                    }
+                    $items[$i]['category_links'] = $links;
+                    $logoMap = is_array($item['category_logo_map'] ?? null) ? $item['category_logo_map'] : [];
+                    foreach ($logoMap as $slug => $logoUrl) {
+                        $logoMap[$slug] = absolutizeCmsMediaUrl((string)$logoUrl, $cmsBaseUrl);
+                    }
+                    $items[$i]['category_logo_map'] = $logoMap;
                 }
             }
             $cache[$cacheKey] = $items;
