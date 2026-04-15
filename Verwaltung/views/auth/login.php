@@ -3,8 +3,7 @@ $title = 'Login';
 $layoutMode = 'auth';
 ob_start();
 ?>
-<h1 class="auth-title">Admin Login</h1>
-<p class="auth-copy">Melde dich mit deinem Verwaltungskonto an.</p>
+<h1 class="auth-title">Login</h1>
 
 <?php if (isset($error)): ?>
     <div class="alert alert--error"><?php echo htmlspecialchars($error, ENT_QUOTES); ?></div>

@@ -48,10 +48,17 @@ $adminRole = $isSuperadmin ? 'Superadmin' : 'Operator';
 <body class="<?php echo $layoutMode === 'auth' ? 'auth-page' : ''; ?>">
 <?php if ($layoutMode === 'auth'): ?>
     <main class="auth-shell">
-        <div class="auth-brand">DIGIWTAL Verwaltung</div>
-        <div class="auth-card">
-            <?php echo $content; ?>
-        </div>
+        <section class="auth-card">
+            <div class="auth-brand" aria-label="DIGIWTAL Verwaltung">
+                <img class="auth-logo" src="<?php echo htmlspecialchars(verwaltung_asset('assets/img/DIGIWTAL_hell.svg'), ENT_QUOTES); ?>" alt="DIGIWTAL">
+            </div>
+            <div class="auth-content">
+                <?php echo $content; ?>
+            </div>
+            <div class="auth-footer">
+                &copy; <?php echo htmlspecialchars(date('Y'), ENT_QUOTES); ?> DIGIWTAL Verwaltung
+            </div>
+        </section>
     </main>
 <?php else: ?>
     <div class="admin-shell">
