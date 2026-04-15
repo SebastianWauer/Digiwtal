@@ -21,7 +21,11 @@ function verwaltung_active_nav(string $uri): string
     };
 }
 
-$title = (string)($title ?? 'DIGIWTAL Verwaltung');
+$title = (string)($title ?? 'Verwaltung');
+$titleClean = trim($title);
+$tabTitle = ($titleClean === '' || $titleClean === 'Verwaltung')
+    ? 'Verwaltung'
+    : $titleClean . ' - Verwaltung';
 $layoutMode = (string)($layoutMode ?? 'admin');
 $requestPath = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
 $activeNav = (string)($activeNav ?? verwaltung_active_nav($requestPath));
@@ -37,9 +41,9 @@ $adminRole = $isSuperadmin ? 'Superadmin' : 'Operator';
     <meta name="theme-color" content="#0f1012">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="DIGIWTAL">
+    <meta name="apple-mobile-web-app-title" content="Verwaltung">
     <link rel="manifest" href="/manifest.json">
-    <title><?php echo htmlspecialchars($title, ENT_QUOTES); ?> – DIGIWTAL</title>
+    <title><?php echo htmlspecialchars($tabTitle, ENT_QUOTES); ?></title>
     <link rel="stylesheet" href="<?php echo htmlspecialchars(verwaltung_asset('assets/css/admin-layout.css'), ENT_QUOTES); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(verwaltung_asset('assets/css/admin-sidebar.css'), ENT_QUOTES); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(verwaltung_asset('assets/css/admin-components.css'), ENT_QUOTES); ?>">
@@ -64,11 +68,7 @@ $adminRole = $isSuperadmin ? 'Superadmin' : 'Operator';
     <div class="admin-shell">
         <aside class="sidebar">
             <div class="brand">
-                <div class="brand__mark">D</div>
-                <div class="brand__text">
-                    <div class="brand__name">DIGIWTAL</div>
-                    <div class="brand__sub">Verwaltung</div>
-                </div>
+                <img class="brand__logo" src="<?php echo htmlspecialchars(verwaltung_asset('assets/img/DIGIWTAL_hell.svg'), ENT_QUOTES); ?>" alt="DIGIWTAL">
             </div>
 
             <nav class="nav">

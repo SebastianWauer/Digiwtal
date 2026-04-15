@@ -10,37 +10,16 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 8px;
-}
-
-.brand__mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  background: var(--active);
-  border: 1px solid var(--btn-border);
-  color: var(--text);
-  font-weight: 800;
+  padding: 10px 8px 12px;
 }
 
-.brand__text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-}
-
-.brand__name {
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.brand__sub {
-  color: var(--muted);
-  font-size: 12px;
+.brand__logo {
+  display: block;
+  width: 100%;
+  max-width: 176px;
+  max-height: 54px;
+  object-fit: contain;
 }
 
 .nav {
