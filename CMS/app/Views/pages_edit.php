@@ -185,7 +185,7 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="text">+ Textblock</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="image">+ Bild</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="hero">+ Herobanner</button>
-              <button type="button" class="btn btn--ghost btn--sm" data-add-block="columns">+ Spalten</button>
+              <button type="button" class="btn btn--ghost btn--sm" data-add-block="columns">+ Kacheln</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="cta">+ Call-to-Action</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="faq">+ FAQ</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="video">+ Video</button>
@@ -444,7 +444,7 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
     text: 'Textblock',
     hero: 'Herobanner',
     image: 'Bild',
-    columns: 'Spalten',
+    columns: 'Kacheln',
     cta: 'Call-to-Action',
     faq: 'FAQ',
     video: 'Video',
@@ -1676,7 +1676,7 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
       } else if (block.type === 'text') {
         blockModalSub.textContent = 'Text-Block: Inhalte und Bild sind in getrennten Kacheln';
       } else if (block.type === 'columns') {
-        blockModalSub.textContent = 'Spalten-Block: Anzahl und Inhalte der Kacheln';
+        blockModalSub.textContent = 'Kachel-Block: Anzahl und Inhalte der Kacheln';
       } else {
         blockModalSub.textContent = `Typ: ${block.type}`;
       }

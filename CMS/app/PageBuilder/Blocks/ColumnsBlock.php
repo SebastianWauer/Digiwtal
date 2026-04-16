@@ -6,7 +6,7 @@ namespace App\PageBuilder\Blocks;
 final class ColumnsBlock extends AbstractBlockType
 {
     public function type(): string { return 'columns'; }
-    public function label(): string { return 'Spalten'; }
+    public function label(): string { return 'Kacheln'; }
 
     public function defaults(): array
     {
@@ -35,22 +35,22 @@ final class ColumnsBlock extends AbstractBlockType
     {
         return [
             'title'       => ['type' => 'string', 'max' => 200,  'label' => 'Titel',           'control' => 'input'],
-            'col_count'   => ['type' => 'string', 'max' => 1,    'label' => 'Spaltenanzahl',    'control' => 'select', 'enum' => ['1', '2', '3', '4', '5']],
-            'col_1_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 1 - Titel', 'control' => 'input'],
-            'col_1_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 1 - Bild', 'control' => 'input'],
-            'col_1_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 1 - Text',  'control' => 'textarea', 'rows' => 4],
-            'col_2_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 2 - Titel', 'control' => 'input'],
-            'col_2_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 2 - Bild', 'control' => 'input'],
-            'col_2_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 2 - Text',  'control' => 'textarea', 'rows' => 4],
-            'col_3_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 3 - Titel', 'control' => 'input'],
-            'col_3_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 3 - Bild', 'control' => 'input'],
-            'col_3_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 3 - Text',  'control' => 'textarea', 'rows' => 4],
-            'col_4_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 4 - Titel', 'control' => 'input'],
-            'col_4_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 4 - Bild', 'control' => 'input'],
-            'col_4_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 4 - Text',  'control' => 'textarea', 'rows' => 4],
-            'col_5_title' => ['type' => 'string', 'max' => 200,  'label' => 'Spalte 5 - Titel', 'control' => 'input'],
-            'col_5_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 5 - Bild', 'control' => 'input'],
-            'col_5_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Spalte 5 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_count'   => ['type' => 'string', 'max' => 1,    'label' => 'Kachelanzahl',    'control' => 'select', 'enum' => ['1', '2', '3', '4', '5']],
+            'col_1_title' => ['type' => 'string', 'max' => 200,  'label' => 'Kachel 1 - Titel', 'control' => 'input'],
+            'col_1_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 1 - Bild', 'control' => 'input'],
+            'col_1_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 1 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_2_title' => ['type' => 'string', 'max' => 200,  'label' => 'Kachel 2 - Titel', 'control' => 'input'],
+            'col_2_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 2 - Bild', 'control' => 'input'],
+            'col_2_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 2 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_3_title' => ['type' => 'string', 'max' => 200,  'label' => 'Kachel 3 - Titel', 'control' => 'input'],
+            'col_3_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 3 - Bild', 'control' => 'input'],
+            'col_3_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 3 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_4_title' => ['type' => 'string', 'max' => 200,  'label' => 'Kachel 4 - Titel', 'control' => 'input'],
+            'col_4_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 4 - Bild', 'control' => 'input'],
+            'col_4_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 4 - Text',  'control' => 'textarea', 'rows' => 4],
+            'col_5_title' => ['type' => 'string', 'max' => 200,  'label' => 'Kachel 5 - Titel', 'control' => 'input'],
+            'col_5_image_url' => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 5 - Bild', 'control' => 'input'],
+            'col_5_text'  => ['type' => 'string', 'max' => 1000, 'label' => 'Kachel 5 - Text',  'control' => 'textarea', 'rows' => 4],
         ];
     }
 
