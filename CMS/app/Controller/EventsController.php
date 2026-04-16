@@ -493,6 +493,7 @@ final class EventsController
         );
         $allowedCategoryIds = array_fill_keys($categoryIds, true);
         $usageCategoryMap = [];
+        $usageCategoryPdfMap = [];
         foreach ($categoryImageMediaIds as $cidRaw => $midRaw) {
             $cid = (int)$cidRaw;
             $mid = (int)$midRaw;
@@ -501,7 +502,26 @@ final class EventsController
             }
             $usageCategoryMap[$cid] = $mid;
         }
-        $this->mediaUsageService()->syncEventUsages($savedEventId, $usageCategoryMap);
+        foreach ($categoryLinksMap as $cidRaw => $linkRows) {
+            $cid = (int)$cidRaw;
+            if ($cid <= 0 || !isset($allowedCategoryIds[$cid]) || !is_array($linkRows)) {
+                continue;
+            }
+            foreach ($linkRows as $linkRow) {
+                if (!is_array($linkRow)) {
+                    continue;
+                }
+                $pdfMediaId = (int)($linkRow['pdf_media_id'] ?? 0);
+                if ($pdfMediaId <= 0) {
+                    continue;
+                }
+                if (!isset($usageCategoryPdfMap[$cid]) || !is_array($usageCategoryPdfMap[$cid])) {
+                    $usageCategoryPdfMap[$cid] = [];
+                }
+                $usageCategoryPdfMap[$cid][] = $pdfMediaId;
+            }
+        }
+        $this->mediaUsageService()->syncEventUsages($savedEventId, $usageCategoryMap, $usageCategoryPdfMap);
 
         $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Event gespeichert.'];
         if (!empty($_POST['save_return'])) {
@@ -556,7 +576,28 @@ final class EventsController
                         $categoryMap[$cid] = $mid;
                     }
                 }
-                $this->mediaUsageService()->syncEventUsages($id, $categoryMap);
+                $categoryPdfMapRaw = is_array($row['category_links_map'] ?? null) ? $row['category_links_map'] : [];
+                $categoryPdfMap = [];
+                foreach ($categoryPdfMapRaw as $cidRaw => $linkRows) {
+                    $cid = (int)$cidRaw;
+                    if ($cid <= 0 || !is_array($linkRows)) {
+                        continue;
+                    }
+                    foreach ($linkRows as $linkRow) {
+                        if (!is_array($linkRow)) {
+                            continue;
+                        }
+                        $pdfMediaId = (int)($linkRow['pdf_media_id'] ?? 0);
+                        if ($pdfMediaId <= 0) {
+                            continue;
+                        }
+                        if (!isset($categoryPdfMap[$cid]) || !is_array($categoryPdfMap[$cid])) {
+                            $categoryPdfMap[$cid] = [];
+                        }
+                        $categoryPdfMap[$cid][] = $pdfMediaId;
+                    }
+                }
+                $this->mediaUsageService()->syncEventUsages($id, $categoryMap, $categoryPdfMap);
             }
         }
         header('Location: /events/deleted');

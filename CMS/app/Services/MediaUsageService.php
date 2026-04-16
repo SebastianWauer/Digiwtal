@@ -141,7 +141,7 @@ final class MediaUsageService
      *
      * @param array<int,int> $categoryImageMediaIds category_id => media_id
      */
-    public function syncEventUsages(int $eventId, array $categoryImageMediaIds = []): void
+    public function syncEventUsages(int $eventId, array $categoryImageMediaIds = [], array $categoryPdfMediaIds = []): void
     {
         if ($eventId <= 0) return;
 
@@ -155,6 +155,15 @@ final class MediaUsageService
             $mid = (int)$mediaId;
             if ($cid <= 0 || $mid <= 0) continue;
             $rows[] = ['media_id' => $mid, 'field_key' => 'category_image_media_ids[' . $cid . ']'];
+        }
+        foreach ($categoryPdfMediaIds as $categoryId => $mediaIds) {
+            $cid = (int)$categoryId;
+            if ($cid <= 0 || !is_array($mediaIds)) continue;
+            foreach (array_values($mediaIds) as $index => $mediaId) {
+                $mid = (int)$mediaId;
+                if ($mid <= 0) continue;
+                $rows[] = ['media_id' => $mid, 'field_key' => 'category_links[' . $cid . '][pdf_media_id][' . (int)$index . ']'];
+            }
         }
 
         $rows = $this->dedupeRows($rows);
@@ -229,6 +238,31 @@ final class MediaUsageService
                     'media_id' => $mid,
                     'field_key' => 'category_image_media_ids[' . $cid . ']',
                 ];
+            }
+        }
+
+        if ($this->tableExists('event_category_links') && $this->columnExists('event_category_links', 'pdf_media_id')) {
+            $st3 = $this->pdo->query("
+                SELECT event_id, category_id, pdf_media_id
+                FROM event_category_links
+                WHERE pdf_media_id IS NOT NULL
+                ORDER BY event_id ASC, category_id ASC, sort_order ASC, id ASC
+            ");
+            $rows = $st3 ? $st3->fetchAll() : [];
+            $pdfIndexByEventCategory = [];
+            foreach (is_array($rows) ? $rows : [] as $r) {
+                if (!is_array($r)) continue;
+                $eid = (int)($r['event_id'] ?? 0);
+                $cid = (int)($r['category_id'] ?? 0);
+                $mid = (int)($r['pdf_media_id'] ?? 0);
+                if ($eid <= 0 || $cid <= 0 || $mid <= 0) continue;
+                $bucket = $eid . ':' . $cid;
+                $index = (int)($pdfIndexByEventCategory[$bucket] ?? 0);
+                $rowsByEvent[$eid][] = [
+                    'media_id' => $mid,
+                    'field_key' => 'category_links[' . $cid . '][pdf_media_id][' . $index . ']',
+                ];
+                $pdfIndexByEventCategory[$bucket] = $index + 1;
             }
         }
 
