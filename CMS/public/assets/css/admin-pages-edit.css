@@ -923,12 +923,43 @@ html[data-theme="dark"] .pages-edit-hero-tabpanel .pages-edit-textarea{
   gap: 10px;
 }
 
+.pages-edit-threecols{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.pages-edit-threecols__column{
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 72%, var(--card) 28%);
+  min-width: 0;
+}
+
+.pages-edit-threecols__title{
+  font-weight: 800;
+}
+
+.pages-edit-blockcard--nested{
+  margin: 0;
+}
+
 html[data-theme="dark"] .pages-edit-block-tabs__bar{
   background: #0f131a;
   border-color: rgba(255,255,255,.12);
 }
 
 html[data-theme="dark"] .pages-edit-block-tabs__panels{
+  background: #0f131a;
+  border-color: rgba(255,255,255,.12);
+}
+
+html[data-theme="dark"] .pages-edit-threecols__column{
   background: #0f131a;
   border-color: rgba(255,255,255,.12);
 }
@@ -983,6 +1014,9 @@ html[data-theme="dark"] .pages-edit-block-tabs__panels{
   .pages-edit-block-tabs__bar{
     width: 100%;
     justify-content: space-between;
+  }
+  .pages-edit-threecols{
+    grid-template-columns: 1fr;
   }
   .pages-edit-hero-preview__media{
     height: min(var(--hero-preview-height), 300px);

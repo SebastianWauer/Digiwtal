@@ -1866,6 +1866,59 @@ nav a[aria-current="page"] .site-nav__active-icon-wrap {
   margin-bottom: 0.75rem;
 }
 
+.block-three-columns {
+  padding-block: var(--space-block);
+  padding-inline: var(--container-pad);
+}
+
+.block-three-columns__inner {
+  max-width: var(--container-max);
+  margin-inline: auto;
+}
+
+.block-three-columns__title {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.block-three-columns__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.block-three-columns__column {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.block-three-columns__column > .block {
+  padding-inline: 0;
+  padding-block: 0;
+}
+
+.block-three-columns__column > .block > * {
+  max-width: none;
+}
+
+.block-three-columns__empty {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+@media (max-width: 980px) {
+  .block-three-columns__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── FAQ ────────────────────────────────────────────── */
 .block-faq {
   padding-block: var(--space-block);

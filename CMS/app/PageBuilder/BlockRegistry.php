@@ -15,6 +15,7 @@ use App\PageBuilder\Blocks\GalleryBlock;
 use App\PageBuilder\Blocks\ContactFormBlock;
 use App\PageBuilder\Blocks\ImprintBlock;
 use App\PageBuilder\Blocks\EventsBlock;
+use App\PageBuilder\Blocks\ThreeColumnsLayoutBlock;
 
 final class BlockRegistry
 {
@@ -46,6 +47,7 @@ final class BlockRegistry
             new ContactFormBlock(),
             new ImprintBlock(),
             new EventsBlock(),
+            new ThreeColumnsLayoutBlock(),
         ];
 
         return self::$typesCache;

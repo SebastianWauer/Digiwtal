@@ -186,6 +186,7 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="image">+ Bild</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="hero">+ Herobanner</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="columns">+ Kacheln</button>
+              <button type="button" class="btn btn--ghost btn--sm" data-add-block="three_columns_layout">+ 3-Spalten Layout</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="cta">+ Call-to-Action</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="faq">+ FAQ</button>
               <button type="button" class="btn btn--ghost btn--sm" data-add-block="video">+ Video</button>
@@ -445,6 +446,7 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
     hero: 'Herobanner',
     image: 'Bild',
     columns: 'Kacheln',
+    three_columns_layout: '3-Spalten Layout',
     cta: 'Call-to-Action',
     faq: 'FAQ',
     video: 'Video',
@@ -465,6 +467,10 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
   let historyIndex = -1;
 
   function safeParseJson(s) { try { return JSON.parse(s); } catch { return null; } }
+  function cloneData(value) {
+    const cloned = safeParseJson(JSON.stringify(value));
+    return cloned === null ? value : cloned;
+  }
   function ensureModel(model) {
     if (!model || typeof model !== 'object') model = {};
     if (Array.isArray(model)) model = {blocks: model};
@@ -1461,6 +1467,164 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
     return wrapper;
   }
 
+  function normalizeNestedBuilderBlock(rawBlock) {
+    if (!rawBlock || typeof rawBlock !== 'object') return null;
+    const type = String(rawBlock.type || '').trim();
+    if (!type || !defs[type] || type === 'three_columns_layout') return null;
+    let data = {};
+    if (rawBlock.data && typeof rawBlock.data === 'object' && !Array.isArray(rawBlock.data)) {
+      data = Object.assign({}, rawBlock.data);
+    } else {
+      data = Object.assign({}, rawBlock);
+      delete data.type;
+      delete data.id;
+      delete data.payload;
+      delete data.position;
+    }
+    return {
+      id: (typeof rawBlock.id === 'string' && rawBlock.id) ? rawBlock.id : uuid(),
+      type,
+      data,
+    };
+  }
+
+  function ensureNestedBuilderBlocks(block, key) {
+    if (!block.data || typeof block.data !== 'object') {
+      block.data = {};
+    }
+    const source = Array.isArray(block.data[key]) ? block.data[key] : [];
+    block.data[key] = source.map(normalizeNestedBuilderBlock).filter(Boolean);
+    return block.data[key];
+  }
+
+  function renderBlockEditorContent(block) {
+    if (block.type === 'hero') return renderHeroBlockFields(block);
+    if (block.type === 'text') return renderTextBlockFields(block);
+    if (block.type === 'columns') return renderColumnsBlockFields(block);
+    if (block.type === 'three_columns_layout') return renderThreeColumnsLayoutFields(block);
+    return renderBlockFields(block);
+  }
+
+  function renderThreeColumnsLayoutFields(block) {
+    const wrapper = el('div', {class: 'pages-edit-block-tabs'});
+    const settingsWrap = el('div', {class: 'pages-edit-fields'});
+    const fields = (defs.three_columns_layout && defs.three_columns_layout.fields && typeof defs.three_columns_layout.fields === 'object')
+      ? defs.three_columns_layout.fields
+      : {};
+
+    if (fields.title) {
+      settingsWrap.appendChild(renderField(block, 'title', fields.title));
+    }
+
+    const childTypes = Object.keys(defs).filter((type) => type !== 'three_columns_layout');
+    const columns = [
+      { key: 'left_blocks', label: 'Linke Spalte' },
+      { key: 'center_blocks', label: 'Mittlere Spalte' },
+      { key: 'right_blocks', label: 'Rechte Spalte' },
+    ];
+
+    const columnsGrid = el('div', {class: 'pages-edit-threecols'});
+
+    const makeAddButtons = (targetList) => {
+      const actions = el('div', {class: 'pages-edit-pb-actions'});
+      childTypes.forEach((type) => {
+        const btn = el('button', {
+          type: 'button',
+          class: 'btn btn--ghost btn--sm',
+          html: `+ ${blockLabel(type)}`,
+        });
+        btn.disabled = !CAN_EDIT;
+        btn.addEventListener('click', () => {
+          if (!CAN_EDIT) return;
+          targetList.push({
+            id: uuid(),
+            type,
+            data: cloneData(defs[type] && defs[type].defaults ? defs[type].defaults : {}),
+          });
+          render();
+          serialize();
+          openBlockEditor(block);
+        });
+        actions.appendChild(btn);
+      });
+      return actions;
+    };
+
+    const makeChildCard = (targetList, nestedBlock, childIndex) => {
+      const card = el('div', {class: 'pages-edit-card pages-edit-blockcard pages-edit-blockcard--nested'});
+      const head = el('div', {class: 'pages-edit-card-head'});
+      const left = el('div', {class: 'pages-edit-blockhead-left'});
+      left.appendChild(el('strong', {class: 'pages-edit-blockhead-title', html: blockLabel(nestedBlock.type)}));
+      left.appendChild(el('span', {class: 'pages-edit-blockhead-meta', html: `(${nestedBlock.type})`}));
+
+      const right = el('div', {class: 'pages-edit-blockhead-actions'});
+      const upBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm pages-edit-blockbtn', html:'↑'});
+      const dnBtn  = el('button', {type:'button', class:'btn btn--ghost btn--sm pages-edit-blockbtn', html:'↓'});
+      const delBtn = el('button', {type:'button', class:'btn btn--ghost btn--danger btn--sm pages-edit-blockbtn pages-edit-blockbtn--delete', html:'Löschen'});
+      upBtn.disabled = !CAN_EDIT || childIndex <= 0;
+      dnBtn.disabled = !CAN_EDIT || childIndex >= targetList.length - 1;
+      delBtn.disabled = !CAN_EDIT;
+
+      upBtn.addEventListener('click', () => {
+        if (!CAN_EDIT || childIndex <= 0) return;
+        const tmp = targetList[childIndex - 1];
+        targetList[childIndex - 1] = targetList[childIndex];
+        targetList[childIndex] = tmp;
+        render();
+        serialize();
+        openBlockEditor(block);
+      });
+      dnBtn.addEventListener('click', () => {
+        if (!CAN_EDIT || childIndex >= targetList.length - 1) return;
+        const tmp = targetList[childIndex + 1];
+        targetList[childIndex + 1] = targetList[childIndex];
+        targetList[childIndex] = tmp;
+        render();
+        serialize();
+        openBlockEditor(block);
+      });
+      delBtn.addEventListener('click', () => {
+        if (!CAN_EDIT) return;
+        targetList.splice(childIndex, 1);
+        render();
+        serialize();
+        openBlockEditor(block);
+      });
+
+      right.appendChild(upBtn);
+      right.appendChild(dnBtn);
+      right.appendChild(delBtn);
+      head.appendChild(left);
+      head.appendChild(right);
+      card.appendChild(head);
+      card.appendChild(renderBlockEditorContent(nestedBlock));
+      return card;
+    };
+
+    columns.forEach((column) => {
+      const col = el('section', {class: 'pages-edit-threecols__column'});
+      const title = el('div', {class: 'pages-edit-threecols__title', html: column.label});
+      col.appendChild(title);
+
+      const targetList = ensureNestedBuilderBlocks(block, column.key);
+      col.appendChild(makeAddButtons(targetList));
+
+      if (targetList.length === 0) {
+        col.appendChild(el('div', {class: 'pages-edit-field-hint', html: 'Noch keine Module in dieser Spalte.'}));
+      } else {
+        targetList.forEach((nestedBlock, childIndex) => {
+          col.appendChild(makeChildCard(targetList, nestedBlock, childIndex));
+        });
+      }
+
+      columnsGrid.appendChild(col);
+    });
+
+    wrapper.appendChild(settingsWrap);
+    wrapper.appendChild(columnsGrid);
+    return wrapper;
+  }
+
   function renderHeroBlockFields(block) {
     const fields = (defs.hero && defs.hero.fields && typeof defs.hero.fields === 'object') ? defs.hero.fields : {};
     const wrapper = el('div', {class: 'pages-edit-hero-tabs'});
@@ -1677,19 +1841,15 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
         blockModalSub.textContent = 'Text-Block: Inhalte und Bild sind in getrennten Kacheln';
       } else if (block.type === 'columns') {
         blockModalSub.textContent = 'Kachel-Block: Anzahl und Inhalte der Kacheln';
+      } else if (block.type === 'three_columns_layout') {
+        blockModalSub.textContent = '3-Spalten Layout: Jede Spalte kann eigene PageBuilder-Module enthalten';
       } else {
         blockModalSub.textContent = `Typ: ${block.type}`;
       }
     }
     blockModalFields.innerHTML = '';
     try {
-      blockModalFields.appendChild(
-        block.type === 'hero'
-          ? renderHeroBlockFields(block)
-          : (block.type === 'text'
-            ? renderTextBlockFields(block)
-            : (block.type === 'columns' ? renderColumnsBlockFields(block) : renderBlockFields(block)))
-      );
+      blockModalFields.appendChild(renderBlockEditorContent(block));
     } catch (err) {
       console.error('Block-Editor konnte nicht vollständig geladen werden:', err);
       blockModalFields.innerHTML = '';
@@ -1795,7 +1955,7 @@ if (!is_string($eventCategoryOptionsJson) || $eventCategoryOptionsJson === '') $
       model.blocks.push({
         id: uuid(),
         type,
-        data: Object.assign({}, defaults)
+        data: cloneData(defaults)
       });
 
       render();
