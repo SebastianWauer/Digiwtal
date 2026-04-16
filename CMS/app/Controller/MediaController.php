@@ -36,7 +36,7 @@ final class MediaController
         $user = \admin_require_perm('media.view');
         [$user, $theme, $_pdo, $mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
 
-        $folderId   = isset($_GET['folder']) ? (int)$_GET['folder'] : 0;
+        $folderId   = isset($_GET['folder']) ? (int)$_GET['folder'] : 1;
         $q          = trim((string)($_GET['q'] ?? ''));
         $ext        = trim((string)($_GET['ext'] ?? ''));
         $onlyUnused = (string)($_GET['unused'] ?? '') === '1';
@@ -56,7 +56,7 @@ final class MediaController
             \admin_set_pref((int)($user['id'] ?? 0), 'media.view', $view);
         }
 
-        if ($folderId <= 0) $folderId = 0;
+        if ($folderId <= 0 || !$folderRepo->findById($folderId)) $folderId = 1;
 
         $total = $mediaRepo->countActive($folderId, $q, $ext, $onlyUnused);
         $totalPages = max(1, (int)ceil($total / $perPage));

@@ -324,7 +324,11 @@ function media_render_folder_nodes(
                     </td>
 
                     <td class="media-col-preview">
-                      <img src="/media/thumb?id=<?= (int)$id ?>" alt="">
+                      <?php if (strtolower($extR) === 'pdf'): ?>
+                        <iframe class="media-preview-embed media-preview-embed--table" src="/media/file?id=<?= (int)$id ?>#toolbar=0&navpanes=0&scrollbar=0&view=FitH" title="PDF-Vorschau" loading="lazy"></iframe>
+                      <?php else: ?>
+                        <img src="/media/thumb?id=<?= (int)$id ?>" alt="">
+                      <?php endif; ?>
                     </td>
 
                     <td>
@@ -396,7 +400,11 @@ function media_render_folder_nodes(
                 <?= $canEdit ? 'draggable="true"' : '' ?>
               >
                 <div class="media-card__thumb">
-                  <img src="/media/thumb?id=<?= (int)$id ?>" alt="">
+                  <?php if (strtolower($extR) === 'pdf'): ?>
+                    <iframe class="media-preview-embed" src="/media/file?id=<?= (int)$id ?>#toolbar=0&navpanes=0&scrollbar=0&view=FitH" title="PDF-Vorschau" loading="lazy"></iframe>
+                  <?php else: ?>
+                    <img src="/media/thumb?id=<?= (int)$id ?>" alt="">
+                  <?php endif; ?>
                   <?php if ($canDelete): ?>
                   <label class="media-card__check">
                     <input type="checkbox" name="id[]" form="mediaDeleteForm" value="<?= (int)$id ?>" <?= $disabled ? 'disabled' : '' ?>>

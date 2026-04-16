@@ -40,6 +40,10 @@ $folderName = $folderNameById[$fid] ?? 'root';
 $sizeKb = $size > 0 ? round($size / 1024, 1) : 0;
 $w = (int)($row['width'] ?? 0);
 $h = (int)($row['height'] ?? 0);
+$isPdf = strtolower($ext) === 'pdf';
+$supportsFocus = in_array(strtolower($ext), ['jpg', 'jpeg', 'png', 'webp', 'svg'], true);
+$previewUrl = '/media/file?id=' . (int)$id;
+$pdfPreviewUrl = $previewUrl . '#toolbar=0&navpanes=0&scrollbar=0&view=FitH';
 $canRotate = $canEdit && in_array(strtolower($ext), ['jpg', 'jpeg', 'png', 'webp'], true);
 
 $usages = $usages ?? [];
@@ -51,9 +55,15 @@ $usages = $usages ?? [];
 
     <!-- LEFT: Preview + Info -->
     <aside class="media-edit__left card">
-      <div class="media-edit__preview">
-        <img src="/media/file?id=<?= (int)$id ?>" alt="" id="mediaFocusPreviewImage">
-        <span class="media-edit__focus-dot" id="mediaFocusDot" aria-hidden="true"></span>
+      <div class="media-edit__preview<?= $isPdf ? ' is-pdf' : '' ?>">
+        <?php if ($isPdf): ?>
+          <iframe class="media-edit__preview-frame" src="<?= h($pdfPreviewUrl) ?>" title="PDF-Vorschau" loading="lazy"></iframe>
+        <?php else: ?>
+          <img src="<?= h($previewUrl) ?>" alt="" id="mediaFocusPreviewImage">
+          <?php if ($supportsFocus): ?>
+            <span class="media-edit__focus-dot" id="mediaFocusDot" aria-hidden="true"></span>
+          <?php endif; ?>
+        <?php endif; ?>
       </div>
 
       <div class="media-edit__meta">
@@ -169,6 +179,7 @@ $usages = $usages ?? [];
           ><?= h($desc) ?></textarea>
         </div>
 
+        <?php if ($supportsFocus): ?>
         <div class="field">
           <div class="label">Fokuspunkt (für Zuschnitte, -1 bis 1)</div>
           <div class="focus-grid">
@@ -203,6 +214,12 @@ $usages = $usages ?? [];
           </div>
           <div class="hint">Klicke ins Bild, um den Fokuspunkt zu setzen. Wertebereich: -1 (links/oben) bis 1 (rechts/unten).</div>
         </div>
+        <?php elseif ($isPdf): ?>
+        <div class="field">
+          <div class="label">PDF-Vorschau</div>
+          <div class="hint">Die Datei wird hier direkt im Browser eingebettet. Fokuspunkt und Rotation sind für PDFs nicht relevant.</div>
+        </div>
+        <?php endif; ?>
 
         <div class="form-actions">
           <?php if ($canEdit): ?>
@@ -250,7 +267,7 @@ $usages = $usages ?? [];
   </div>
 </div>
 
-<?php if ($canEdit): ?>
+<?php if ($canEdit && $supportsFocus): ?>
 <script>
 (() => {
   const img = document.getElementById('mediaFocusPreviewImage');

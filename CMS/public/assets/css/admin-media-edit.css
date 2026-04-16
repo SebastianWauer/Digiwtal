@@ -42,6 +42,18 @@
   cursor: crosshair;
 }
 
+.media-edit__preview-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #fff;
+}
+
+.media-edit__preview.is-pdf {
+  overflow: hidden;
+}
+
 .media-edit__focus-dot {
   position: absolute;
   width: 14px;
