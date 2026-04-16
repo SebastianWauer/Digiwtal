@@ -90,6 +90,8 @@ $router->get('/media/edit', \App\Controller\MediaController::class, 'edit');
 $router->post('/media/save', \App\Controller\MediaController::class, 'save');
 $router->post('/media/upload', \App\Controller\MediaController::class, 'upload');
 $router->post('/media/folder/create', \App\Controller\MediaController::class, 'folderCreate');
+$router->post('/media/folder/move', \App\Controller\MediaController::class, 'folderMove');
+$router->post('/media/folder/delete', \App\Controller\MediaController::class, 'folderDelete');
 $router->post('/media/delete', \App\Controller\MediaController::class, 'delete');
 $router->post('/media/restore', \App\Controller\MediaController::class, 'restore');
 $router->post('/media/purge', \App\Controller\MediaController::class, 'purge');

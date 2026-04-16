@@ -157,6 +157,10 @@
 
 .media-folders__title { font-weight: 700; margin-bottom: 10px; }
 
+.media-folders__all {
+  margin-bottom: 10px;
+}
+
 .media-folder-form {
   display: grid;
   gap: 8px;
@@ -166,6 +170,32 @@
 .media-folder-tree {
   display: grid;
   gap: 6px;
+}
+
+.media-folder-tools {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.12);
+}
+
+.media-folder-tools__title {
+  font-size: 12px;
+  opacity: 0.75;
+  font-weight: 700;
+}
+
+.media-folder-tools__name {
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.media-folder-tool-form {
+  display: grid;
+  gap: 8px;
 }
 
 /* row wrapper with toggle + link */

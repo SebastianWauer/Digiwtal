@@ -28,6 +28,7 @@ $total = max(0, (int)($total ?? 0));
 
 $canEdit   = (function_exists('admin_can') && admin_can('media.edit'));
 $canDelete = (function_exists('admin_can') && admin_can('media.delete'));
+$allMediaSelected = ((int)$folderId) === 0;
 
 $folderNameById = [];
 $folderById = [];
@@ -53,7 +54,7 @@ foreach ($folders as $f) {
     $childrenByParent[$key][] = $f;
 }
 
-$currentFolderName = $folderNameById[(int)$folderId] ?? 'Root';
+$currentFolderName = $allMediaSelected ? 'Alle Medien' : ($folderNameById[(int)$folderId] ?? 'Root');
 
 /**
  * Open-Set: alle Ancestors vom aktiven Folder sollen offen sein
@@ -98,6 +99,7 @@ function media_render_folder_nodes(
     array $openIds,
     int $activeFolderId,
     string $view,
+    bool $canEdit,
     int $parentIdOrNullFlag, // -1 means NULL, otherwise parent id
     int $depth = 0
 ): void {
@@ -141,6 +143,7 @@ function media_render_folder_nodes(
                     class="media-folder <?= $active ? 'is-active' : '' ?> <?= $depthClass ?>"
                     href="/media?folder=<?= (int)$fid ?>&view=<?= h($view) ?>"
                     data-folder-id="<?= (int)$fid ?>"
+                    <?php if ($canEdit && $fid > 1): ?>data-folder-drag-id="<?= (int)$fid ?>" draggable="true"<?php endif; ?>
                 >
                     <span class="media-folder__icon" aria-hidden="true">📁</span>
                     <span class="media-folder__name"><?= h($name) ?></span>
@@ -149,12 +152,30 @@ function media_render_folder_nodes(
 
             <?php if ($hasChildren): ?>
                 <div class="media-folder-children" data-folder-children="<?= (int)$fid ?>">
-                    <?php media_render_folder_nodes($childrenByParent, $folderNameById, $openIds, $activeFolderId, $view, $fid, $depth + 1); ?>
+                    <?php media_render_folder_nodes($childrenByParent, $folderNameById, $openIds, $activeFolderId, $view, $canEdit, $fid, $depth + 1); ?>
                 </div>
             <?php endif; ?>
         </div>
         <?php
     }
+}
+
+function media_folder_can_move_into(int $folderId, int $candidateParentId, array $parentById): bool {
+    if ($folderId <= 1 || $candidateParentId <= 0 || $folderId === $candidateParentId) {
+        return false;
+    }
+
+    $cur = $candidateParentId;
+    $guard = 0;
+    while ($cur > 0 && $guard < 50) {
+        if ($cur === $folderId) {
+            return false;
+        }
+        $cur = (int)($parentById[$cur] ?? 0);
+        $guard++;
+    }
+
+    return true;
 }
 ?>
 
@@ -228,10 +249,17 @@ function media_render_folder_nodes(
     <aside class="media-folders">
       <div class="media-folders__title">Ordner</div>
 
+      <div class="media-folders__all">
+        <a href="/media?folder=0&view=<?= h($view) ?>" class="media-folder media-folder--all <?= $allMediaSelected ? 'is-active' : '' ?>">
+          <span class="media-folder__icon" aria-hidden="true">#</span>
+          <span class="media-folder__name">Alle Medien</span>
+        </a>
+      </div>
+
       <?php if ($canEdit): ?>
         <form method="post" action="/media/folder/create" class="media-folder-form is-open" id="mediaFolderForm">
           <?= admin_csrf_field() ?>
-          <input type="hidden" name="parent_id" value="<?= (int)$folderId ?>">
+          <input type="hidden" name="parent_id" value="<?= $allMediaSelected ? 1 : (int)$folderId ?>">
           <div class="media-folder-input">
             <input type="text" name="name" class="media-input" placeholder="Neuer Ordner…">
             <button type="submit" class="btn btn--sm btn--primary add-folder-btn">+</button>
@@ -239,8 +267,39 @@ function media_render_folder_nodes(
         </form>
       <?php endif; ?>
 
+      <?php if ($canEdit && !$allMediaSelected && (int)$folderId > 1 && isset($folderById[(int)$folderId])): ?>
+        <div class="media-folder-tools">
+          <div class="media-folder-tools__title">Aktueller Ordner</div>
+          <div class="media-folder-tools__name"><?= h($currentFolderName) ?></div>
+
+          <form method="post" action="/media/folder/move" class="media-folder-tool-form">
+            <?= admin_csrf_field() ?>
+            <input type="hidden" name="folder_id" value="<?= (int)$folderId ?>">
+            <select class="media-select" name="target_parent_id" required>
+              <option value="">In Ordner verschieben…</option>
+              <?php foreach ($folders as $f): ?>
+                <?php
+                  if (!is_array($f)) continue;
+                  $targetId = (int)($f['id'] ?? 0);
+                  if (!media_folder_can_move_into((int)$folderId, $targetId, $parentById)) continue;
+                  $targetLabel = media_folder_full_path($targetId, $parentById, $folderNameById);
+                ?>
+                <option value="<?= $targetId ?>"><?= h($targetLabel) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <button type="submit" class="btn btn--ghost btn--sm">Ordner verschieben</button>
+          </form>
+
+          <form method="post" action="/media/folder/delete" class="media-folder-tool-form" onsubmit="return confirm('Ordner wirklich löschen? Nur leere Ordner ohne Unterordner können gelöscht werden.');">
+            <?= admin_csrf_field() ?>
+            <input type="hidden" name="folder_id" value="<?= (int)$folderId ?>">
+            <button type="submit" class="btn btn--ghost btn--danger btn--sm">Ordner löschen</button>
+          </form>
+        </div>
+      <?php endif; ?>
+
       <div class="media-folder-tree" id="mediaFolderTree">
-        <?php media_render_folder_nodes($childrenByParent, $folderNameById, $openIds, (int)$folderId, $view, -1, 0); ?>
+        <?php media_render_folder_nodes($childrenByParent, $folderNameById, $openIds, (int)$folderId, $view, $canEdit, -1, 0); ?>
       </div>
     </aside>
 
@@ -256,7 +315,7 @@ function media_render_folder_nodes(
               <button type="submit" class="btn btn--ghost btn--danger btn--sm">Löschen</button>
             <?php endif; ?>
 
-            <a href="/media?view=<?= h($view) ?>" class="btn btn--ghost btn--sm">Alle Medien</a>
+            <a href="/media?folder=0&view=<?= h($view) ?>" class="btn btn--ghost btn--sm">Alle Medien</a>
 
             <?php if ($canDelete): ?>
               <a href="/media/deleted?view=<?= h($view) ?>" class="btn btn--ghost btn--sm">Papierkorb</a>
@@ -681,6 +740,40 @@ function media_render_folder_nodes(
     return true;
   }
 
+  async function moveFolder(folderId, targetParentId) {
+    const fd = new FormData();
+    fd.append('folder_id', String(folderId));
+    fd.append('target_parent_id', String(targetParentId));
+    if (token) fd.append('_token', token);
+
+    const res = await fetch('/media/folder/move', {
+      method: 'POST',
+      body: fd,
+      headers: token ? {'X-CSRF-Token': token} : {},
+      credentials: 'same-origin'
+    });
+
+    if (res.redirected && res.url) {
+      window.location.href = res.url;
+      return true;
+    }
+
+    return res.ok;
+  }
+
+  const draggableFolders = document.querySelectorAll('.media-folder[data-folder-drag-id]');
+  draggableFolders.forEach(a => {
+    a.addEventListener('dragstart', (e) => {
+      const folderDragId = a.getAttribute('data-folder-drag-id') || '';
+      if (!folderDragId) return;
+
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/x-media-folder', folderDragId);
+      } catch (_) {}
+    });
+  });
+
   const folders = document.querySelectorAll('.media-folder[data-folder-id]');
   folders.forEach(a => {
     a.addEventListener('dragover', (e) => {
@@ -697,6 +790,13 @@ function media_render_folder_nodes(
 
       const folderId = parseInt(a.getAttribute('data-folder-id') || '0', 10);
       if (!folderId) return;
+
+      const draggedFolderId = parseInt((e.dataTransfer && e.dataTransfer.getData('application/x-media-folder')) || '0', 10);
+      if (draggedFolderId > 0) {
+        const ok = await moveFolder(draggedFolderId, folderId);
+        if (ok) window.location.reload();
+        return;
+      }
 
       const mediaId = parseInt((e.dataTransfer && e.dataTransfer.getData('text/plain')) || '0', 10);
       if (!mediaId) return;

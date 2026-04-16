@@ -96,4 +96,64 @@ final class MediaFolderRepositoryDb implements MediaFolderRepositoryInterface
         ");
         $st->execute([':n' => $name, ':id' => $id]);
     }
+
+    public function moveFolder(int $id, ?int $parentId): bool
+    {
+        if ($id <= 0) return false;
+
+        $st = $this->pdo->prepare("
+            UPDATE media_folders
+            SET parent_id = :pid, updated_at = NOW()
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $st->execute([
+            ':pid' => ($parentId !== null && $parentId > 0) ? $parentId : null,
+            ':id' => $id,
+        ]);
+
+        return ((int)$st->rowCount() > 0);
+    }
+
+    public function deleteFolder(int $id): bool
+    {
+        if ($id <= 0) return false;
+
+        $st = $this->pdo->prepare("
+            DELETE FROM media_folders
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $st->execute([':id' => $id]);
+
+        return ((int)$st->rowCount() > 0);
+    }
+
+    public function countChildren(int $id): int
+    {
+        if ($id <= 0) return 0;
+
+        $st = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM media_folders
+            WHERE parent_id = :id
+        ");
+        $st->execute([':id' => $id]);
+
+        return (int)($st->fetchColumn() ?: 0);
+    }
+
+    public function countMediaItems(int $id): int
+    {
+        if ($id <= 0) return 0;
+
+        $st = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM media_items
+            WHERE folder_id = :id
+        ");
+        $st->execute([':id' => $id]);
+
+        return (int)($st->fetchColumn() ?: 0);
+    }
 }

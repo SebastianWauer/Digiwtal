@@ -56,7 +56,8 @@ final class MediaController
             \admin_set_pref((int)($user['id'] ?? 0), 'media.view', $view);
         }
 
-        if ($folderId <= 0 || !$folderRepo->findById($folderId)) $folderId = 1;
+        if ($folderId < 0) $folderId = 1;
+        if ($folderId > 0 && !$folderRepo->findById($folderId)) $folderId = 1;
 
         $total = $mediaRepo->countActive($folderId, $q, $ext, $onlyUnused);
         $totalPages = max(1, (int)ceil($total / $perPage));
@@ -320,6 +321,129 @@ final class MediaController
         }
 
         header('Location: /media?folder=' . $parentId);
+        exit;
+    }
+
+    public function folderMove(): void
+    {
+        $user = \admin_require_perm('media.edit');
+        [$user, $_theme, $_pdo, $_mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Method Not Allowed'];
+            header('Location: /media');
+            exit;
+        }
+
+        \admin_verify_csrf();
+
+        $folderId = (int)($_POST['folder_id'] ?? 0);
+        $targetParentId = (int)($_POST['target_parent_id'] ?? 0);
+
+        if ($folderId <= 1) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Dieser Ordner kann nicht verschoben werden.'];
+            header('Location: /media');
+            exit;
+        }
+
+        $folder = $folderRepo->findById($folderId);
+        if (!is_array($folder)) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordner nicht gefunden.'];
+            header('Location: /media');
+            exit;
+        }
+
+        if ($targetParentId <= 0) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Zielordner ist ungültig.'];
+            header('Location: /media?folder=' . $folderId);
+            exit;
+        }
+
+        $targetParent = $folderRepo->findById($targetParentId);
+        if (!is_array($targetParent)) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Zielordner wurde nicht gefunden.'];
+            header('Location: /media?folder=' . $folderId);
+            exit;
+        }
+
+        if ($targetParentId === $folderId || $this->folderIsDescendantOf($targetParentId, $folderId, $folderRepo)) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ein Ordner kann nicht in sich selbst oder einen Unterordner verschoben werden.'];
+            header('Location: /media?folder=' . $folderId);
+            exit;
+        }
+
+        $existing = $folderRepo->findByParentAndName($targetParentId, (string)($folder['name'] ?? ''));
+        if (is_array($existing) && (int)($existing['id'] ?? 0) !== $folderId) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Im Zielordner gibt es bereits einen Ordner mit diesem Namen.'];
+            header('Location: /media?folder=' . $folderId);
+            exit;
+        }
+
+        if ($folderRepo->moveFolder($folderId, $targetParentId)) {
+            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Ordner wurde verschoben.'];
+            header('Location: /media?folder=' . $folderId);
+            exit;
+        }
+
+        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordner konnte nicht verschoben werden.'];
+        header('Location: /media?folder=' . $folderId);
+        exit;
+    }
+
+    public function folderDelete(): void
+    {
+        $user = \admin_require_perm('media.edit');
+        [$user, $_theme, $_pdo, $_mediaRepo, $folderRepo, $_usageRepo, $_service] = $this->deps($user);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Method Not Allowed'];
+            header('Location: /media');
+            exit;
+        }
+
+        \admin_verify_csrf();
+
+        $folderId = (int)($_POST['folder_id'] ?? 0);
+        if ($folderId <= 1) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Dieser Ordner kann nicht gelöscht werden.'];
+            header('Location: /media');
+            exit;
+        }
+
+        $folder = $folderRepo->findById($folderId);
+        if (!is_array($folder)) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordner nicht gefunden.'];
+            header('Location: /media');
+            exit;
+        }
+
+        if ($folderRepo->countChildren($folderId) > 0) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordner kann nur gelöscht werden, wenn er keine Unterordner enthält.'];
+            header('Location: /media?folder=' . $folderId);
+            exit;
+        }
+
+        if ($folderRepo->countMediaItems($folderId) > 0) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordner kann nur gelöscht werden, wenn er keine Medien enthält.'];
+            header('Location: /media?folder=' . $folderId);
+            exit;
+        }
+
+        $parentId = (int)($folder['parent_id'] ?? 1);
+        if ($parentId <= 0) {
+            $parentId = 1;
+        }
+
+        if ($folderRepo->deleteFolder($folderId)) {
+            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Ordner wurde gelöscht.'];
+            header('Location: /media?folder=' . $parentId);
+            exit;
+        }
+
+        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Ordner konnte nicht gelöscht werden.'];
+        header('Location: /media?folder=' . $folderId);
         exit;
     }
 
@@ -759,6 +883,28 @@ final class MediaController
         if ($name === '') $name = 'file';
         $name = str_replace(["\r", "\n", '"'], ['', '', ''], $name);
         return $name;
+    }
+
+    private function folderIsDescendantOf(int $folderId, int $ancestorId, MediaFolderRepositoryDb $folderRepo): bool
+    {
+        $currentId = $folderId;
+        $guard = 0;
+        while ($currentId > 0 && $guard < 100) {
+            if ($currentId === $ancestorId) {
+                return true;
+            }
+            $row = $folderRepo->findById($currentId);
+            if (!is_array($row)) {
+                return false;
+            }
+            $parentId = (int)($row['parent_id'] ?? 0);
+            if ($parentId <= 0) {
+                return false;
+            }
+            $currentId = $parentId;
+            $guard++;
+        }
+        return false;
     }
 
     private function buildPdfThumbSvg(array $row): string
