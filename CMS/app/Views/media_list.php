@@ -28,7 +28,6 @@ $total = max(0, (int)($total ?? 0));
 
 $canEdit   = (function_exists('admin_can') && admin_can('media.edit'));
 $canDelete = (function_exists('admin_can') && admin_can('media.delete'));
-$allMediaSelected = ((int)$folderId) === 0;
 
 $folderNameById = [];
 $folderById = [];
@@ -53,8 +52,6 @@ foreach ($folders as $f) {
     $childrenByParent[$key] ??= [];
     $childrenByParent[$key][] = $f;
 }
-
-$currentFolderName = $allMediaSelected ? 'Alle Medien' : ($folderNameById[(int)$folderId] ?? 'Root');
 
 /**
  * Open-Set: alle Ancestors vom aktiven Folder sollen offen sein
@@ -160,23 +157,6 @@ function media_render_folder_nodes(
     }
 }
 
-function media_folder_can_move_into(int $folderId, int $candidateParentId, array $parentById): bool {
-    if ($folderId <= 1 || $candidateParentId <= 0 || $folderId === $candidateParentId) {
-        return false;
-    }
-
-    $cur = $candidateParentId;
-    $guard = 0;
-    while ($cur > 0 && $guard < 50) {
-        if ($cur === $folderId) {
-            return false;
-        }
-        $cur = (int)($parentById[$cur] ?? 0);
-        $guard++;
-    }
-
-    return true;
-}
 ?>
 
 <div class="media-page">
@@ -247,55 +227,26 @@ function media_folder_can_move_into(int $folderId, int $candidateParentId, array
 
     <!-- Left: folders -->
     <aside class="media-folders">
-      <div class="media-folders__title">Ordner</div>
-
-      <div class="media-folders__all">
-        <a href="/media?folder=0&view=<?= h($view) ?>" class="media-folder media-folder--all <?= $allMediaSelected ? 'is-active' : '' ?>">
-          <span class="media-folder__icon" aria-hidden="true">#</span>
-          <span class="media-folder__name">Alle Medien</span>
-        </a>
+      <div class="media-folders__head">
+        <div class="media-folders__title">Ordner</div>
+        <?php if ($canEdit && (int)$folderId > 1 && isset($folderById[(int)$folderId])): ?>
+          <form method="post" action="/media/folder/delete" class="media-folders__delete" onsubmit="return confirm('Ordner wirklich löschen? Nur leere Ordner ohne Unterordner können gelöscht werden.');">
+            <?= admin_csrf_field() ?>
+            <input type="hidden" name="folder_id" value="<?= (int)$folderId ?>">
+            <button type="submit" class="btn btn--ghost btn--danger btn--sm">Löschen</button>
+          </form>
+        <?php endif; ?>
       </div>
 
       <?php if ($canEdit): ?>
         <form method="post" action="/media/folder/create" class="media-folder-form is-open" id="mediaFolderForm">
           <?= admin_csrf_field() ?>
-          <input type="hidden" name="parent_id" value="<?= $allMediaSelected ? 1 : (int)$folderId ?>">
+          <input type="hidden" name="parent_id" value="<?= ((int)$folderId) === 0 ? 1 : (int)$folderId ?>">
           <div class="media-folder-input">
             <input type="text" name="name" class="media-input" placeholder="Neuer Ordner…">
             <button type="submit" class="btn btn--sm btn--primary add-folder-btn">+</button>
           </div>
         </form>
-      <?php endif; ?>
-
-      <?php if ($canEdit && !$allMediaSelected && (int)$folderId > 1 && isset($folderById[(int)$folderId])): ?>
-        <div class="media-folder-tools">
-          <div class="media-folder-tools__title">Aktueller Ordner</div>
-          <div class="media-folder-tools__name"><?= h($currentFolderName) ?></div>
-
-          <form method="post" action="/media/folder/move" class="media-folder-tool-form">
-            <?= admin_csrf_field() ?>
-            <input type="hidden" name="folder_id" value="<?= (int)$folderId ?>">
-            <select class="media-select" name="target_parent_id" required>
-              <option value="">In Ordner verschieben…</option>
-              <?php foreach ($folders as $f): ?>
-                <?php
-                  if (!is_array($f)) continue;
-                  $targetId = (int)($f['id'] ?? 0);
-                  if (!media_folder_can_move_into((int)$folderId, $targetId, $parentById)) continue;
-                  $targetLabel = media_folder_full_path($targetId, $parentById, $folderNameById);
-                ?>
-                <option value="<?= $targetId ?>"><?= h($targetLabel) ?></option>
-              <?php endforeach; ?>
-            </select>
-            <button type="submit" class="btn btn--ghost btn--sm">Ordner verschieben</button>
-          </form>
-
-          <form method="post" action="/media/folder/delete" class="media-folder-tool-form" onsubmit="return confirm('Ordner wirklich löschen? Nur leere Ordner ohne Unterordner können gelöscht werden.');">
-            <?= admin_csrf_field() ?>
-            <input type="hidden" name="folder_id" value="<?= (int)$folderId ?>">
-            <button type="submit" class="btn btn--ghost btn--danger btn--sm">Ordner löschen</button>
-          </form>
-        </div>
       <?php endif; ?>
 
       <div class="media-folder-tree" id="mediaFolderTree">
