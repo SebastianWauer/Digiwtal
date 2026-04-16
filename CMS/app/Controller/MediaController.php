@@ -676,6 +676,15 @@ final class MediaController
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: no-referrer');
 
+        if ($ext === 'pdf') {
+            $svg = $this->buildPdfThumbSvg($row);
+            header('Content-Type: image/svg+xml; charset=UTF-8');
+            header('Content-Length: ' . (string)strlen($svg));
+            header('Content-Disposition: inline; filename="pdf-thumb-' . $id . '.svg"');
+            echo $svg;
+            exit;
+        }
+
         if ($ext === 'svg') {
             header("Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'none'; sandbox");
             header('Content-Type: image/svg+xml; charset=UTF-8');
@@ -750,6 +759,65 @@ final class MediaController
         if ($name === '') $name = 'file';
         $name = str_replace(["\r", "\n", '"'], ['', '', ''], $name);
         return $name;
+    }
+
+    private function buildPdfThumbSvg(array $row): string
+    {
+        $label = trim((string)($row['display_filename'] ?? $row['original_filename'] ?? 'PDF'));
+        if ($label === '') {
+            $label = 'PDF';
+        }
+
+        $label = preg_replace('/\s+/u', ' ', $label) ?? $label;
+        if (mb_strlen($label) > 28) {
+            $label = mb_substr($label, 0, 25) . '...';
+        }
+
+        $sizeBytes = (int)($row['size_bytes'] ?? 0);
+        $meta = $sizeBytes > 0 ? $this->humanFilesize($sizeBytes) : 'PDF-Datei';
+
+        $labelEsc = htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $metaEsc = htmlspecialchars($meta, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480" role="img" aria-label="PDF Vorschau">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="100%" stop-color="#ffe4e6"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" rx="32" fill="url(#bg)"/>
+  <rect x="120" y="56" width="400" height="368" rx="28" fill="#ffffff" stroke="#e5e7eb" stroke-width="10"/>
+  <path d="M440 56v92c0 15.464 12.536 28 28 28h52" fill="#fee2e2"/>
+  <path d="M440 56l80 120h-52c-15.464 0-28-12.536-28-28V56z" fill="#fecaca"/>
+  <rect x="168" y="140" width="128" height="48" rx="16" fill="#dc2626"/>
+  <text x="232" y="172" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#ffffff">PDF</text>
+  <rect x="168" y="220" width="304" height="18" rx="9" fill="#e5e7eb"/>
+  <rect x="168" y="256" width="248" height="18" rx="9" fill="#e5e7eb"/>
+  <rect x="168" y="292" width="276" height="18" rx="9" fill="#e5e7eb"/>
+  <text x="320" y="360" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#111827">{$labelEsc}</text>
+  <text x="320" y="394" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#6b7280">{$metaEsc}</text>
+</svg>
+SVG;
+    }
+
+    private function humanFilesize(int $bytes): string
+    {
+        if ($bytes <= 0) {
+            return '0 B';
+        }
+
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $value = (float)$bytes;
+        $unit = 0;
+        while ($value >= 1024 && $unit < count($units) - 1) {
+            $value /= 1024;
+            $unit++;
+        }
+
+        $decimals = $value >= 10 || $unit === 0 ? 0 : 1;
+        return number_format($value, $decimals, ',', '.') . ' ' . $units[$unit];
     }
 
     private function sanitizeDisplay(string $name): string
